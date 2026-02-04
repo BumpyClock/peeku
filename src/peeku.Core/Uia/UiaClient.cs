@@ -4,7 +4,7 @@ using FlaUI.UIA3;
 
 namespace peeku;
 
-public sealed class UiaClient : IPeekuClient
+public sealed partial class UiaClient : IPeekuClient
 {
   public Task<UiaSnapshotResult> UiaSnapshotAsync(UiaSnapshotRequest req, CancellationToken ct = default)
   {
@@ -422,24 +422,6 @@ public sealed class UiaClient : IPeekuClient
     => throw new NotImplementedException();
 
   public Task<ElementGetResult> ElementGetAsync(ElementGetRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
-
-  public Task<ActionResult> ClickAsync(ClickRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
-
-  public Task<ActionResult> InvokeAsync(InvokeRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
-
-  public Task<ActionResult> SetValueAsync(SetValueRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
-
-  public Task<ActionResult> TypeAsync(TypeRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
-
-  public Task<ActionResult> ScrollAsync(ScrollRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
-
-  public Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
 
   public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default)
