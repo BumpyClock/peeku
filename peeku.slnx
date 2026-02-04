@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/peeku.Cli/peeku.Cli.csproj" />
+    <Project Path="src/peeku.Core/peeku.Core.csproj" />
+    <Project Path="src/peeku.Mcp/peeku.Mcp.csproj" />
+  </Folder>
+</Solution>
