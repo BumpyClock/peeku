@@ -77,8 +77,110 @@ public sealed class WindowsClient : IPeekuClient
   public Task<UiaSnapshotResult> UiaSnapshotAsync(UiaSnapshotRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
 
-  public Task<SeeResult> SeeAsync(SeeRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+  public async Task<SeeResult> SeeAsync(SeeRequest req, CancellationToken ct = default)
+  {
+    var scope = Results.Start();
+
+    try
+    {
+      ct.ThrowIfCancellationRequested();
+
+      if (req is null)
+      {
+        return new SeeResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          Image: new CaptureImageResult(
+            Ok: false,
+            Meta: scope.Meta(),
+            ImagePath: "",
+            MimeType: "image/png",
+            Width: 0,
+            Height: 0,
+            Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request is required.")),
+          SnapshotId: "",
+          Elements: Array.Empty<UiaElement>(),
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request is required."));
+      }
+
+      var captureReq = new CaptureImageRequest(req.Target, OutPath: null, IncludeBase64: req.IncludeBase64);
+      var image = await CaptureImageAsync(captureReq, ct).ConfigureAwait(false);
+      if (!image.Ok)
+      {
+        return new SeeResult(
+          Ok: false,
+          Meta: scope.Meta(warning: image.Meta.Warning),
+          Image: image,
+          SnapshotId: "",
+          Elements: Array.Empty<UiaElement>(),
+          Error: image.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "Capture failed."));
+      }
+
+      var uia = new UiaClient();
+      var snapshot = await uia.UiaSnapshotAsync(
+        new UiaSnapshotRequest(
+          Target: req.Target,
+          Depth: req.Depth,
+          MaxNodes: req.MaxNodes,
+          IncludeProperties: req.IncludeProperties),
+        ct).ConfigureAwait(false);
+
+      if (!snapshot.Ok)
+      {
+        return new SeeResult(
+          Ok: false,
+          Meta: scope.Meta(warning: CombineWarnings(image.Meta.Warning, snapshot.Meta.Warning)),
+          Image: image,
+          SnapshotId: snapshot.SnapshotId,
+          Elements: snapshot.Elements,
+          Error: snapshot.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "UIA snapshot failed."));
+      }
+
+      return new SeeResult(
+        Ok: true,
+        Meta: scope.Meta(warning: CombineWarnings(image.Meta.Warning, snapshot.Meta.Warning)),
+        Image: image,
+        SnapshotId: snapshot.SnapshotId,
+        Elements: snapshot.Elements);
+    }
+    catch (OperationCanceledException)
+    {
+      return new SeeResult(
+        Ok: false,
+        Meta: scope.Meta(),
+        Image: new CaptureImageResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          ImagePath: "",
+          MimeType: "image/png",
+          Width: 0,
+          Height: 0,
+          Error: PeekuErrors.Create(PeekuErrorCode.Canceled, "Operation cancelled.")),
+        SnapshotId: "",
+        Elements: Array.Empty<UiaElement>(),
+        Error: PeekuErrors.Create(PeekuErrorCode.Canceled, "Operation cancelled."));
+    }
+    catch (Exception ex)
+    {
+      return new SeeResult(
+        Ok: false,
+        Meta: scope.Meta(),
+        Image: new CaptureImageResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          ImagePath: "",
+          MimeType: "image/png",
+          Width: 0,
+          Height: 0,
+          Error: PeekuErrors.Create(PeekuErrorCode.Internal, "See failed.", new { exception = ex.GetType().FullName, ex.Message, ex.HResult })),
+        SnapshotId: "",
+        Elements: Array.Empty<UiaElement>(),
+        Error: PeekuErrors.Create(
+          PeekuErrorCode.Internal,
+          "See failed.",
+          new { exception = ex.GetType().FullName, ex.Message, ex.HResult }));
+    }
+  }
 
   public Task<FindResult> FindAsync(FindRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
@@ -112,4 +214,19 @@ public sealed class WindowsClient : IPeekuClient
 
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
+
+  private static string? CombineWarnings(string? a, string? b)
+  {
+    if (string.IsNullOrWhiteSpace(a))
+    {
+      return string.IsNullOrWhiteSpace(b) ? null : b;
+    }
+
+    if (string.IsNullOrWhiteSpace(b))
+    {
+      return a;
+    }
+
+    return $"{a} {b}";
+  }
 }
