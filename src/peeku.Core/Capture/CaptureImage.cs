@@ -2,7 +2,7 @@ namespace peeku;
 
 internal static class CaptureImage
 {
-  internal static Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct)
+  internal static async Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct)
   {
     var scope = Results.Start();
 
@@ -12,89 +12,116 @@ internal static class CaptureImage
 
       if (req is null)
       {
-        return Task.FromResult(new CaptureImageResult(
+        return new CaptureImageResult(
           Ok: false,
           Meta: scope.Meta(),
           ImagePath: "",
           MimeType: "image/png",
           Width: 0,
           Height: 0,
-          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request required.")));
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request required."));
       }
 
       if (req.Target is null)
       {
-        return Task.FromResult(new CaptureImageResult(
+        return new CaptureImageResult(
           Ok: false,
           Meta: scope.Meta(),
           ImagePath: "",
           MimeType: "image/png",
           Width: 0,
           Height: 0,
-          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Target required.")));
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Target required."));
       }
 
-      var outPath = string.IsNullOrWhiteSpace(req.OutPath) ? "" : req.OutPath.Trim();
-      var targetKind = req.Target switch
+      if (!WgcCapture.IsSupported())
       {
-        Target.Desktop => "Desktop",
-        Target.FocusedWindow => "FocusedWindow",
-        Target.Screen s => $"Screen({s.ScreenIndex})",
-        Target.WindowByHwnd h => $"WindowByHwnd({h.HwndHex})",
-        Target.WindowByQuery => "WindowByQuery",
-        _ => req.Target.GetType().Name,
-      };
+        return new CaptureImageResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          ImagePath: "",
+          MimeType: "image/png",
+          Width: 0,
+          Height: 0,
+          Error: PeekuErrors.Create(
+            PeekuErrorCode.Unavailable,
+            "Windows.Graphics.Capture not supported on this OS."));
+      }
 
-      return Task.FromResult(new CaptureImageResult(
-        Ok: false,
-        Meta: scope.Meta(warning: "capture_image not implemented yet (WGC prototype pending)."),
+      var outPath = string.IsNullOrWhiteSpace(req.OutPath)
+        ? WgcCapture.DefaultOutPath(scope.TraceId)
+        : Path.GetFullPath(req.OutPath.Trim());
+
+      var dir = Path.GetDirectoryName(outPath);
+      if (!string.IsNullOrWhiteSpace(dir))
+      {
+        Directory.CreateDirectory(dir);
+      }
+
+      if (!GraphicsCaptureItemFactory.TryCreate(req.Target, ct, out var item, out var itemError))
+      {
+        return new CaptureImageResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          ImagePath: outPath,
+          MimeType: "image/png",
+          Width: 0,
+          Height: 0,
+          Error: itemError ?? PeekuErrors.Create(PeekuErrorCode.Internal, "Failed to create capture item."));
+      }
+
+      if (item is null)
+      {
+        return new CaptureImageResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          ImagePath: outPath,
+          MimeType: "image/png",
+          Width: 0,
+          Height: 0,
+          Error: PeekuErrors.Create(PeekuErrorCode.Internal, "Capture item was null."));
+      }
+
+      var warning = req.IncludeBase64 ? "includeBase64 not implemented yet; returning Base64Png=null." : null;
+
+      var capture = await WgcCapture.CapturePngAsync(item, ct).ConfigureAwait(false);
+      if (!capture.Ok || capture.PngBytes is null)
+      {
+        return new CaptureImageResult(
+          Ok: false,
+          Meta: scope.Meta(warning: capture.Warning),
+          ImagePath: outPath,
+          MimeType: "image/png",
+          Width: 0,
+          Height: 0,
+          Error: capture.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "Capture failed."));
+      }
+
+      await File.WriteAllBytesAsync(outPath, capture.PngBytes, ct).ConfigureAwait(false);
+
+      return new CaptureImageResult(
+        Ok: true,
+        Meta: scope.Meta(warning: CombineWarnings(capture.Warning, warning)),
         ImagePath: outPath,
         MimeType: "image/png",
-        Width: 0,
-        Height: 0,
-        Base64Png: null,
-        Error: PeekuErrors.Create(
-          PeekuErrorCode.NotSupported,
-          "Capture image not implemented yet. See src/peeku.Core/Capture/WGC_NOTES.md.",
-          new
-          {
-            target = targetKind,
-            includeBase64 = req.IncludeBase64,
-            outPath = outPath.Length == 0 ? null : outPath,
-            wgc = new
-            {
-              minWindowsBuild = 18362,
-              minWindowsVersion = "Windows 10 1903",
-              tfmHint = "net*-windows10.0.18362.0 (or higher) for WinRT projections",
-              packagesLikelyNeeded = new[]
-              {
-                "Microsoft.WindowsAppSDK OR Microsoft.Windows.SDK.NET (WinRT projections)",
-                "Windows.Win32 (CsWin32) for COM/PInvoke interop (optional but likely)",
-                "Vortice.Windows (or similar) for D3D11 device creation (SharpDX deprecated)",
-              },
-              apis = new[]
-              {
-                "Windows.Graphics.Capture (GraphicsCaptureItem, Direct3D11CaptureFramePool, GraphicsCaptureSession)",
-                "Windows.Graphics.DirectX.Direct3D11 (IDirect3DDevice/IDirect3DSurface)",
-                "IGraphicsCaptureItemInterop (hwnd/monitor -> GraphicsCaptureItem)",
-              },
-            },
-          })));
+        Width: capture.Width,
+        Height: capture.Height,
+        Base64Png: null);
     }
     catch (OperationCanceledException)
     {
-      return Task.FromResult(new CaptureImageResult(
+      return new CaptureImageResult(
         Ok: false,
         Meta: scope.Meta(),
         ImagePath: "",
         MimeType: "image/png",
         Width: 0,
         Height: 0,
-        Error: PeekuErrors.Create(PeekuErrorCode.Canceled, "Operation cancelled.")));
+        Error: PeekuErrors.Create(PeekuErrorCode.Canceled, "Operation cancelled."));
     }
     catch (Exception ex)
     {
-      return Task.FromResult(new CaptureImageResult(
+      return new CaptureImageResult(
         Ok: false,
         Meta: scope.Meta(),
         ImagePath: "",
@@ -104,8 +131,22 @@ internal static class CaptureImage
         Error: PeekuErrors.Create(
           PeekuErrorCode.Internal,
           "Capture image failed.",
-          new { exception = ex.GetType().FullName, ex.Message, ex.HResult })));
+          new { exception = ex.GetType().FullName, ex.Message, ex.HResult }));
     }
   }
-}
 
+  private static string? CombineWarnings(string? a, string? b)
+  {
+    if (string.IsNullOrWhiteSpace(a))
+    {
+      return string.IsNullOrWhiteSpace(b) ? null : b;
+    }
+
+    if (string.IsNullOrWhiteSpace(b))
+    {
+      return a;
+    }
+
+    return $"{a} {b}";
+  }
+}
