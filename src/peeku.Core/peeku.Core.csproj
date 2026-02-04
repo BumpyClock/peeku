@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="FlaUI.Core.Signed" />
+    <PackageReference Include="FlaUI.UIA3.Signed" />
+  </ItemGroup>
+
 </Project>
