@@ -325,6 +325,15 @@ public sealed partial class UiaClient
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Text is required."));
       }
 
+      if (req.DelayMs is not null && req.DelayMs.Value < 0)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          MethodUsed: methodUsed,
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "DelayMs must be >= 0."));
+      }
+
       var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
       if (!resolved.Ok || resolved.Selection is null)
       {
@@ -356,19 +365,47 @@ public sealed partial class UiaClient
           Error: PeekuErrors.Create(PeekuErrorCode.ElementNotFound, "Element not found for type.", new { refId = resolved.Selection.Element.RefId }));
       }
 
-      var text = req.Text;
+      var delayMs = req.DelayMs.GetValueOrDefault(0);
+
+      var baseText = "";
       if (req.Append && TryGetValue(element, out var current))
       {
-        text = (current ?? "") + text;
+        baseText = current ?? "";
       }
 
-      if (!TrySetValue(element, text, out var setError))
+      if (delayMs <= 0)
       {
+        if (!TrySetValue(element, baseText + req.Text, out var setError))
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, rootWarning)),
+            MethodUsed: methodUsed,
+            Error: setError);
+        }
+
         return new ActionResult(
-          Ok: false,
+          Ok: true,
           Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, rootWarning)),
-          MethodUsed: methodUsed,
-          Error: setError);
+          MethodUsed: methodUsed);
+      }
+
+      var typed = baseText;
+      for (var i = 0; i < req.Text.Length; i++)
+      {
+        ct.ThrowIfCancellationRequested();
+        typed += req.Text[i];
+
+        if (!TrySetValue(element, typed, out var setError))
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, rootWarning)),
+            MethodUsed: methodUsed,
+            Error: setError);
+        }
+
+        await Task.Delay(delayMs, ct).ConfigureAwait(false);
       }
 
       return new ActionResult(
