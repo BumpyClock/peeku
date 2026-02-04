@@ -82,8 +82,6 @@ internal static class CaptureImage
           Error: PeekuErrors.Create(PeekuErrorCode.Internal, "Capture item was null."));
       }
 
-      var warning = req.IncludeBase64 ? "includeBase64 not implemented yet; returning Base64Png=null." : null;
-
       var capture = await WgcCapture.CapturePngAsync(item, ct).ConfigureAwait(false);
       if (!capture.Ok || capture.PngBytes is null)
       {
@@ -99,14 +97,16 @@ internal static class CaptureImage
 
       await File.WriteAllBytesAsync(outPath, capture.PngBytes, ct).ConfigureAwait(false);
 
+      var base64 = req.IncludeBase64 ? Convert.ToBase64String(capture.PngBytes) : null;
+
       return new CaptureImageResult(
         Ok: true,
-        Meta: scope.Meta(warning: CombineWarnings(capture.Warning, warning)),
+        Meta: scope.Meta(warning: capture.Warning),
         ImagePath: outPath,
         MimeType: "image/png",
         Width: capture.Width,
         Height: capture.Height,
-        Base64Png: null);
+        Base64Png: base64);
     }
     catch (OperationCanceledException)
     {
@@ -133,20 +133,5 @@ internal static class CaptureImage
           "Capture image failed.",
           new { exception = ex.GetType().FullName, ex.Message, ex.HResult }));
     }
-  }
-
-  private static string? CombineWarnings(string? a, string? b)
-  {
-    if (string.IsNullOrWhiteSpace(a))
-    {
-      return string.IsNullOrWhiteSpace(b) ? null : b;
-    }
-
-    if (string.IsNullOrWhiteSpace(b))
-    {
-      return a;
-    }
-
-    return $"{a} {b}";
   }
 }
