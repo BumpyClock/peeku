@@ -1,0 +1,1 @@
+c:/Users/adityasharma/Projects/peeku/AGENTS.md
