@@ -4,14 +4,6 @@ using FlaUI.UIA3;
 
 namespace peeku;
 
-/// <summary>
-/// UI Automation client backed by FlaUI UIA3.
-/// Usage:
-/// <code>
-/// var client = new UiaClient();
-/// var res = await client.UiaSnapshotAsync(new UiaSnapshotRequest(Target.Focused()));
-/// </code>
-/// </summary>
 public sealed class UiaClient : IPeekuClient
 {
   public Task<UiaSnapshotResult> UiaSnapshotAsync(UiaSnapshotRequest req, CancellationToken ct = default)
@@ -81,13 +73,13 @@ public sealed class UiaClient : IPeekuClient
           Error: PeekuErrors.Create(PeekuErrorCode.WindowNotFound, "Target window not found.")));
       }
 
-      var nextId = 0;
       var nodesCaptured = 0;
       var truncated = false;
       var elements = new List<UiaElement>(capacity: Math.Clamp(req.MaxNodes, 1, 8192));
 
+      var rootRefId = UiaRefId.Create(rootElement);
       var rootBuilder = new NodeBuilder(
-        RefId: NextRefId(ref nextId),
+        RefId: rootRefId,
         Name: ReadName(rootElement, req.IncludeProperties),
         ControlType: ReadControlType(rootElement, req.IncludeProperties),
         Element: rootElement);
@@ -136,8 +128,9 @@ public sealed class UiaClient : IPeekuClient
             break;
           }
 
+          var childRefId = UiaRefId.Create(child);
           var childBuilder = new NodeBuilder(
-            RefId: NextRefId(ref nextId),
+            RefId: childRefId,
             Name: ReadName(child, req.IncludeProperties),
             ControlType: ReadControlType(child, req.IncludeProperties),
             Element: child);
@@ -285,13 +278,6 @@ public sealed class UiaClient : IPeekuClient
 
     hwnd = unchecked((nint)value);
     return hwnd != 0;
-  }
-
-  private static string NextRefId(ref int nextId)
-  {
-    var id = nextId;
-    nextId++;
-    return $"e{id}";
   }
 
   private static string? ReadName(AutomationElement element, UiaPropertiesMode mode)
