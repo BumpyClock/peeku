@@ -421,9 +421,6 @@ public sealed partial class UiaClient : IPeekuClient
   public Task<FindResult> FindAsync(FindRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
 
-  public Task<ElementGetResult> ElementGetAsync(ElementGetRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
-
   public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
 

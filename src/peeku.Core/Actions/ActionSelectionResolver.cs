@@ -39,7 +39,7 @@ internal static class ActionSelectionResolver
       Target: targetUsed,
       Depth: 6,
       MaxNodes: 5000,
-      IncludeProperties: UiaPropertiesMode.Basic);
+      IncludeProperties: UiaPropertiesMode.All);
 
     var snapshot = await snapshotAsync(snapshotReq, ct).ConfigureAwait(false);
     if (!snapshot.Ok)
@@ -138,4 +138,3 @@ internal static class ActionSelectionResolver
       Warning: snapshot.Meta.Warning);
   }
 }
-

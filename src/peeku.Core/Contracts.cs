@@ -196,7 +196,8 @@ public record FindResult(
 public record ElementGetRequest(
   string? RefId = null,
   Selector? Selector = null,
-  Target? Target = null);
+  Target? Target = null,
+  UiaPropertiesMode IncludeProperties = UiaPropertiesMode.All);
 
 public record ElementGetResult(
   bool Ok,

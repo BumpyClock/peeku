@@ -306,7 +306,7 @@ public sealed class WindowsClient : IPeekuClient
   }
 
   public Task<ElementGetResult> ElementGetAsync(ElementGetRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().ElementGetAsync(req, ct);
 
   public Task<ActionResult> ClickAsync(ClickRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
