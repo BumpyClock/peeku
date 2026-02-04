@@ -20,7 +20,7 @@ public sealed partial class UiaClient
           Meta: scope.Meta(),
           Element: new UiaElement(new ElementRef("")),
           Properties: new Dictionary<string, object?>(),
-          Patterns: new Dictionary<string, object?>(),
+          Patterns: Array.Empty<string>(),
           Rect: null,
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request is required."));
       }
@@ -32,12 +32,12 @@ public sealed partial class UiaClient
           Meta: scope.Meta(),
           Element: new UiaElement(new ElementRef("")),
           Properties: new Dictionary<string, object?>(),
-          Patterns: new Dictionary<string, object?>(),
+          Patterns: Array.Empty<string>(),
           Rect: null,
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "IncludeProperties is invalid."));
       }
 
-      var hasRefId = !string.IsNullOrWhiteSpace(req.RefId);
+      var hasRefId = req.Element is not null && !string.IsNullOrWhiteSpace(req.Element.RefId);
       var hasSelector = req.Selector is not null && !string.IsNullOrWhiteSpace(req.Selector.Expr);
       if (hasRefId == hasSelector)
       {
@@ -46,11 +46,11 @@ public sealed partial class UiaClient
           Meta: scope.Meta(),
           Element: new UiaElement(new ElementRef("")),
           Properties: new Dictionary<string, object?>(),
-          Patterns: new Dictionary<string, object?>(),
+          Patterns: Array.Empty<string>(),
           Rect: null,
           Error: PeekuErrors.Create(
             PeekuErrorCode.InvalidArgument,
-            "Provide exactly one of refId or selector.",
+            "Provide exactly one of elementRef or selector.",
             new { hasRefId, hasSelector }));
       }
 
@@ -61,7 +61,7 @@ public sealed partial class UiaClient
       string refId;
       if (hasRefId)
       {
-        refId = req.RefId!.Trim();
+        refId = req.Element!.RefId.Trim();
       }
       else
       {
@@ -80,7 +80,7 @@ public sealed partial class UiaClient
             Meta: scope.Meta(warning: snapshot.Meta.Warning),
             Element: new UiaElement(new ElementRef("")),
             Properties: new Dictionary<string, object?>(),
-            Patterns: new Dictionary<string, object?>(),
+            Patterns: Array.Empty<string>(),
             Rect: null,
             Error: snapshot.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "UIA snapshot failed."));
         }
@@ -100,7 +100,7 @@ public sealed partial class UiaClient
             Meta: scope.Meta(warning: selectorWarning),
             Element: new UiaElement(new ElementRef("")),
             Properties: new Dictionary<string, object?>(),
-            Patterns: new Dictionary<string, object?>(),
+            Patterns: Array.Empty<string>(),
             Rect: null,
             Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Invalid selector.", new { selector = req.Selector!.Expr, error = ex.Message }));
         }
@@ -112,7 +112,7 @@ public sealed partial class UiaClient
             Meta: scope.Meta(warning: selectorWarning),
             Element: new UiaElement(new ElementRef("")),
             Properties: new Dictionary<string, object?>(),
-            Patterns: new Dictionary<string, object?>(),
+            Patterns: Array.Empty<string>(),
             Rect: null,
             Error: PeekuErrors.Create(
               PeekuErrorCode.ElementNotFound,
@@ -136,7 +136,7 @@ public sealed partial class UiaClient
           Meta: scope.Meta(warning: CombineWarnings(selectorWarning, rootWarning)),
           Element: new UiaElement(new ElementRef("")),
           Properties: new Dictionary<string, object?>(),
-          Patterns: new Dictionary<string, object?>(),
+          Patterns: Array.Empty<string>(),
           Rect: null,
           Error: PeekuErrors.Create(code, "Target window not found."));
       }
@@ -149,14 +149,14 @@ public sealed partial class UiaClient
           Meta: scope.Meta(warning: CombineWarnings(selectorWarning, rootWarning)),
           Element: new UiaElement(new ElementRef(refId, snapshotId)),
           Properties: new Dictionary<string, object?>(),
-          Patterns: new Dictionary<string, object?>(),
+          Patterns: Array.Empty<string>(),
           Rect: null,
           Error: PeekuErrors.Create(PeekuErrorCode.ElementNotFound, "Element not found.", new { refId, snapshotId, target = targetUsed }));
       }
 
       var el = ReadElement(refId, snapshotId, element, req.IncludeProperties);
       var properties = ReadProperties(element, req.IncludeProperties);
-      var patterns = ReadPatterns(element);
+      var patterns = ReadSupportedPatterns(element);
 
       return new ElementGetResult(
         Ok: true,
@@ -173,7 +173,7 @@ public sealed partial class UiaClient
         Meta: scope.Meta(),
         Element: new UiaElement(new ElementRef("")),
         Properties: new Dictionary<string, object?>(),
-        Patterns: new Dictionary<string, object?>(),
+        Patterns: Array.Empty<string>(),
         Rect: null,
         Error: PeekuErrors.Create(PeekuErrorCode.Canceled, "Operation cancelled."));
     }
@@ -184,7 +184,7 @@ public sealed partial class UiaClient
         Meta: scope.Meta(),
         Element: new UiaElement(new ElementRef("")),
         Properties: new Dictionary<string, object?>(),
-        Patterns: new Dictionary<string, object?>(),
+        Patterns: Array.Empty<string>(),
         Rect: null,
         Error: PeekuErrors.Create(
           PeekuErrorCode.Internal,
@@ -227,22 +227,25 @@ public sealed partial class UiaClient
     return d;
   }
 
-  private static IReadOnlyDictionary<string, object?> ReadPatterns(AutomationElement element)
-    => new Dictionary<string, object?>(StringComparer.Ordinal)
-    {
-      ["invoke"] = Safe(() => element.Patterns.Invoke.IsSupported),
-      ["toggle"] = Safe(() => element.Patterns.Toggle.IsSupported),
-      ["value"] = Safe(() => element.Patterns.Value.IsSupported),
-      ["selectionItem"] = Safe(() => element.Patterns.SelectionItem.IsSupported),
-      ["scroll"] = Safe(() => element.Patterns.Scroll.IsSupported),
-      ["expandCollapse"] = Safe(() => element.Patterns.ExpandCollapse.IsSupported),
-      ["rangeValue"] = Safe(() => element.Patterns.RangeValue.IsSupported),
-      ["gridItem"] = Safe(() => element.Patterns.GridItem.IsSupported),
-      ["text"] = Safe(() => element.Patterns.Text.IsSupported),
-      ["window"] = Safe(() => element.Patterns.Window.IsSupported),
-      ["transform"] = Safe(() => element.Patterns.Transform.IsSupported),
-      ["legacyIAccessible"] = Safe(() => element.Patterns.LegacyIAccessible.IsSupported),
-    };
+  private static IReadOnlyList<string> ReadSupportedPatterns(AutomationElement element)
+  {
+    var list = new List<string>(capacity: 8);
+
+    if (element.Patterns.Invoke.IsSupported) list.Add("invoke");
+    if (element.Patterns.Toggle.IsSupported) list.Add("toggle");
+    if (element.Patterns.Value.IsSupported) list.Add("value");
+    if (element.Patterns.SelectionItem.IsSupported) list.Add("selectionItem");
+    if (element.Patterns.Scroll.IsSupported) list.Add("scroll");
+    if (element.Patterns.ExpandCollapse.IsSupported) list.Add("expandCollapse");
+    if (element.Patterns.RangeValue.IsSupported) list.Add("rangeValue");
+    if (element.Patterns.GridItem.IsSupported) list.Add("gridItem");
+    if (element.Patterns.Text.IsSupported) list.Add("text");
+    if (element.Patterns.Window.IsSupported) list.Add("window");
+    if (element.Patterns.Transform.IsSupported) list.Add("transform");
+    if (element.Patterns.LegacyIAccessible.IsSupported) list.Add("legacyIAccessible");
+
+    return list;
+  }
 
   private static object? Safe(Func<object?> f)
   {

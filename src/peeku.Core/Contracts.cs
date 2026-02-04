@@ -194,7 +194,7 @@ public record FindResult(
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
 
 public record ElementGetRequest(
-  string? RefId = null,
+  ElementRef? Element = null,
   Selector? Selector = null,
   Target? Target = null,
   UiaPropertiesMode IncludeProperties = UiaPropertiesMode.All);
@@ -204,7 +204,7 @@ public record ElementGetResult(
   ResultMeta Meta,
   UiaElement Element,
   IReadOnlyDictionary<string, object?> Properties,
-  IReadOnlyDictionary<string, object?> Patterns,
+  IReadOnlyList<string> Patterns,
   Rect? Rect = null,
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
 
