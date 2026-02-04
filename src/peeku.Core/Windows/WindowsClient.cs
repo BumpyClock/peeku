@@ -72,7 +72,7 @@ public sealed class WindowsClient : IPeekuClient
     => throw new NotImplementedException();
 
   public Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => CaptureImage.CaptureImageAsync(req, ct);
 
   public Task<UiaSnapshotResult> UiaSnapshotAsync(UiaSnapshotRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
