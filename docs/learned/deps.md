@@ -13,7 +13,7 @@ Date: 2026-02-04
   - `Serilog` `4.3.0` (Apache-2.0)
   - `Serilog.Sinks.Console` `6.1.1`
   - `Serilog.Sinks.File` `7.0.0`
-  - `Serilog.Formatting.Compact` `3.0.0`
+  - `Serilog.Formatting.Compact` `2.0.0`
 - Core (UI Automation):
   - `FlaUI.Core.Signed` `5.0.0` (MIT)
   - `FlaUI.UIA3.Signed` `5.0.0` (MIT)
