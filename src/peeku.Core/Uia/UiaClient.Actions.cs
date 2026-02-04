@@ -606,10 +606,44 @@ public sealed partial class UiaClient
         Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Keys is required.")));
     }
 
-    return Task.FromResult(new ActionResult(
-      Ok: false,
-      Meta: scope.Meta(),
-      MethodUsed: ActionMethod.Input,
-      Error: PeekuErrors.Create(PeekuErrorCode.NotSupported, "Hotkey requires input injection (not supported yet).")));
+    try
+    {
+      ct.ThrowIfCancellationRequested();
+
+      if (!HotkeyInputInjector.TryParse(req.Keys, out var chord, out var parseError))
+      {
+        return Task.FromResult(new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          MethodUsed: ActionMethod.Input,
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, parseError ?? "Keys is invalid.")));
+      }
+
+      HotkeyInputInjector.Send(chord);
+
+      return Task.FromResult(new ActionResult(
+        Ok: true,
+        Meta: scope.Meta(),
+        MethodUsed: ActionMethod.Input));
+    }
+    catch (OperationCanceledException)
+    {
+      return Task.FromResult(new ActionResult(
+        Ok: false,
+        Meta: scope.Meta(),
+        MethodUsed: ActionMethod.Input,
+        Error: PeekuErrors.Create(PeekuErrorCode.Canceled, "Operation cancelled.")));
+    }
+    catch (Exception ex)
+    {
+      return Task.FromResult(new ActionResult(
+        Ok: false,
+        Meta: scope.Meta(),
+        MethodUsed: ActionMethod.Input,
+        Error: PeekuErrors.Create(
+          PeekuErrorCode.Internal,
+          "Hotkey failed.",
+          new { exception = ex.GetType().FullName, ex.Message, ex.HResult })));
+    }
   }
 }
