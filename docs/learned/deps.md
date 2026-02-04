@@ -4,7 +4,7 @@ Date: 2026-02-04
 
 ## Targets
 
-- .NET: `net10.0-windows` (SDK pinned via `global.json`)
+- .NET: `net10.0-windows` (SDK pinned via `global.json` -> 10.0.102)
 
 ## Packages (central pin)
 
@@ -26,6 +26,7 @@ Date: 2026-02-04
 
 - WinRT / WGC: rely on Windows-targeted TFM + SDK-provided WinRT projections; add explicit Windows SDK ref package only if we hit missing API surface.
 - MCP SDK currently preview; expect churn; keep tool surface behind our own adapters (`ToolDescriptor` plan in PRD).
+  - Verified latest stable package versions on NuGet (2026-02-04).
 
 ## Refs
 
