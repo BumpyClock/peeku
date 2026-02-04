@@ -1,4 +1,5 @@
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
 using FlaUI.UIA3;
 
 namespace peeku;
@@ -449,8 +450,35 @@ public sealed partial class UiaClient
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request is required."));
       }
 
+      if (req.Delta is null && req.Lines is null)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          MethodUsed: ActionMethod.Uia,
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Provide delta or lines."));
+      }
+
+      if (req.Lines is not null && req.Lines.Value == 0)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          MethodUsed: ActionMethod.Uia,
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Lines must be non-zero."));
+      }
+
+      if (req.Delta is not null && req.Delta.Value == 0)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          MethodUsed: ActionMethod.Uia,
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Delta must be non-zero."));
+      }
+
       var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
-      if (!resolved.Ok)
+      if (!resolved.Ok || resolved.Selection is null)
       {
         return new ActionResult(
           Ok: false,
@@ -459,11 +487,90 @@ public sealed partial class UiaClient
           Error: resolved.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "Selection resolution failed."));
       }
 
+      var stepsRaw = req.Lines ?? (req.Delta is null ? 0 : req.Delta.Value / 120);
+      if (stepsRaw == 0)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: resolved.Warning),
+          MethodUsed: ActionMethod.Uia,
+          Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Scroll delta too small; use lines or a larger delta."));
+      }
+
+      var warning = resolved.Warning;
+      var steps = stepsRaw;
+      if (Math.Abs(steps) > 50)
+      {
+        steps = Math.Sign(steps) * 50;
+        warning = CombineWarnings(warning, "Scroll steps clamped to 50.");
+      }
+
+      using var automation = new UIA3Automation();
+      var root = ResolveRoot(resolved.Selection.Target, automation, ct, out var rootWarning);
+      if (root is null)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: CombineWarnings(warning, rootWarning)),
+          MethodUsed: ActionMethod.Uia,
+          Error: PeekuErrors.Create(PeekuErrorCode.WindowNotFound, "Target window not found."));
+      }
+
+      var element = FindByRefId(root, resolved.Selection.Element.RefId, maxNodes: 20_000, ct);
+      if (element is null)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: CombineWarnings(warning, rootWarning)),
+          MethodUsed: ActionMethod.Uia,
+          Error: PeekuErrors.Create(PeekuErrorCode.ElementNotFound, "Element not found for scroll.", new { refId = resolved.Selection.Element.RefId }));
+      }
+
+      if (!element.Patterns.Scroll.IsSupported)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: CombineWarnings(warning, rootWarning)),
+          MethodUsed: ActionMethod.Uia,
+          Error: PeekuErrors.Create(PeekuErrorCode.NotSupported, "Element does not support scroll pattern."));
+      }
+
+      var pattern = element.Patterns.Scroll.Pattern;
+      var amount = steps > 0 ? ScrollAmount.SmallIncrement : ScrollAmount.SmallDecrement;
+      var count = Math.Abs(steps);
+
+      try
+      {
+        for (var i = 0; i < count; i++)
+        {
+          ct.ThrowIfCancellationRequested();
+
+          if (req.Direction == ScrollDirection.Horizontal)
+          {
+            pattern.Scroll(amount, ScrollAmount.NoAmount);
+          }
+          else
+          {
+            pattern.Scroll(ScrollAmount.NoAmount, amount);
+          }
+        }
+      }
+      catch (Exception ex)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: CombineWarnings(warning, rootWarning)),
+          MethodUsed: ActionMethod.Uia,
+          Error: PeekuErrors.Create(
+            PeekuErrorCode.Internal,
+            "Scroll failed.",
+            new { exception = ex.GetType().FullName, ex.Message, ex.HResult }));
+      }
+
       return new ActionResult(
-        Ok: false,
-        Meta: scope.Meta(warning: resolved.Warning),
-        MethodUsed: ActionMethod.Uia,
-        Error: PeekuErrors.Create(PeekuErrorCode.NotSupported, "Scroll not supported yet."));
+        Ok: true,
+        Meta: scope.Meta(warning: CombineWarnings(warning, rootWarning)),
+        MethodUsed: ActionMethod.Uia);
     }
     catch (OperationCanceledException)
     {
