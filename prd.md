@@ -36,17 +36,17 @@ I’ll also call out the **maintained libraries** that make each part easier.
 
 ---
 
-## 1) Public API proposal (WinPeek.Core)
+## 1) Public API proposal (peeku.Core)
 
 ### Packaging and namespaces
 
-* `WinPeek.Core` (NuGet) — public library
-* `WinPeek.Cli` (exe)
-* `WinPeek.Mcp` (exe hosting MCP server)
+* `peeku.Core` (NuGet) — public library
+* `peeku.Cli` (exe)
+* `peeku.Mcp` (exe hosting MCP server)
 
 ### Core principles
 
-1. **One canonical “tool API”** in code: CLI and MCP are both adapters over the same `IWinPeekClient`.
+1. **One canonical “tool API”** in code: CLI and MCP are both adapters over the same `IpeekuClient`.
 2. All operations are **async**, accept **CancellationToken**, and return **structured results** with trace IDs.
 3. Prefer **UIA patterns** for actions; use input injection as a fallback (later phase).
 
@@ -55,9 +55,9 @@ I’ll also call out the **maintained libraries** that make each part easier.
 ### Public API (C#) — canonical interface
 
 ```csharp
-namespace WinPeek;
+namespace peeku;
 
-public interface IWinPeekClient
+public interface IpeekuClient
 {
     // Health / diagnostics
     Task<DoctorResult> DoctorAsync(DoctorRequest req, CancellationToken ct = default);
@@ -142,7 +142,7 @@ public record ResultMeta(
     int DurationMs,
     string? Warning = null);
 
-public record WinPeekError(
+public record peekuError(
     string Code,               // e.g. "ElementNotFound"
     string Message,
     object? Details = null);
@@ -172,11 +172,11 @@ Every response includes:
 
 ---
 
-## 2) CLI command surface (WinPeek.Cli)
+## 2) CLI command surface (peeku.Cli)
 
 ### Global behavior
 
-**Executable:** `winpeek`
+**Executable:** `peeku`
 
 **Global options (apply to all commands)**
 
@@ -196,7 +196,7 @@ Every response includes:
 
 #### 1) Diagnostics
 
-**`winpeek doctor`**
+**`peeku doctor`**
 
 * Purpose: verify OS/build, capture availability, UIA availability, permissions
 * Output: `DoctorResult`
@@ -204,12 +204,12 @@ Every response includes:
 Example:
 
 ```bash
-winpeek doctor --format json
+peeku doctor --format json
 ```
 
 #### 2) Window discovery
 
-**`winpeek windows list`**
+**`peeku windows list`**
 
 * Options:
 
@@ -218,13 +218,13 @@ winpeek doctor --format json
   * `--limit <n>` (default 50)
 * Output: list of windows with `hwnd`, `title`, `processId`, `processName`
 
-**`winpeek windows focused`**
+**`peeku windows focused`**
 
 * Output: focused window info
 
 #### 3) Capture
 
-**`winpeek capture image`**
+**`peeku capture image`**
 
 * Options:
 
@@ -235,7 +235,7 @@ winpeek doctor --format json
 
 #### 4) UIA snapshot & “see”
 
-**`winpeek uia snapshot`**
+**`peeku uia snapshot`**
 
 * Options:
 
@@ -245,14 +245,14 @@ winpeek doctor --format json
   * `--include-properties basic|all`
 * Output: snapshotId + root node + flattened elements
 
-**`winpeek see`** *(capture + UIA snapshot in one call)*
+**`peeku see`** *(capture + UIA snapshot in one call)*
 
 * Options: `--target`, `--depth`, `--max-nodes`, `--include-base64`, `--include-properties`
 * Output: screenshot + snapshot + element list
 
 #### 5) Find and inspect elements
 
-**`winpeek find`**
+**`peeku find`**
 
 * Args:
 
@@ -261,14 +261,14 @@ winpeek doctor --format json
   * `--limit <n>` (default 20)
 * Output: list of matches with `elementRef`, `rect`, key attrs
 
-**`winpeek element get`**
+**`peeku element get`**
 
 * Args: `--ref <refId>` or `--selector <expr>`
 * Output: full detail for one element (patterns, attributes, computed properties)
 
 #### 6) Actions
 
-**`winpeek click`**
+**`peeku click`**
 
 * Args: `--ref <refId>` OR `--selector <expr>` (+ optional `--target`)
 * Options:
@@ -276,15 +276,15 @@ winpeek doctor --format json
   * `--method auto|uia|input` (default `auto`)
 * Output: action result
 
-**`winpeek invoke`**
+**`peeku invoke`**
 
 * Same selection args; uses UIA Invoke pattern when available
 
-**`winpeek set-value`**
+**`peeku set-value`**
 
 * Args: `--ref/--selector` + `--value "<text>"`
 
-**`winpeek type`**
+**`peeku type`**
 
 * Args: `--ref/--selector` + `--text "<text>"`
 * Options:
@@ -292,18 +292,18 @@ winpeek doctor --format json
   * `--append true|false` (default true)
   * `--delay-ms <n>` (optional, for flaky apps)
 
-**`winpeek scroll`**
+**`peeku scroll`**
 
 * Args: `--ref/--selector` + `--delta -120|120` OR `--lines <n>`
 * Options: `--direction vertical|horizontal` (default vertical)
 
-**`winpeek hotkey`**
+**`peeku hotkey`**
 
 * Args: `--keys "CTRL+SHIFT+S"`
 
 #### 7) Observe and wait
 
-**`winpeek observe`**
+**`peeku observe`**
 
 * Args:
 
@@ -313,7 +313,7 @@ winpeek doctor --format json
   * `--max-events <n>` (default 200)
 * Output: JSONL or JSON array of events
 
-**`winpeek wait`**
+**`peeku wait`**
 
 * Args:
 
@@ -324,7 +324,7 @@ winpeek doctor --format json
 
 #### 8) Batch
 
-**`winpeek batch`**
+**`peeku batch`**
 
 * Args:
 
@@ -344,27 +344,27 @@ winpeek doctor --format json
 
 ### Tool naming convention
 
-To avoid collisions across servers, prefix everything with `winpeek_`, and mirror the CLI “path” with underscores:
+To avoid collisions across servers, prefix everything with `peeku_`, and mirror the CLI “path” with underscores:
 
 | CLI                       | MCP tool name             |
 | ------------------------- | ------------------------- |
-| `winpeek doctor`          | `winpeek_doctor`          |
-| `winpeek windows list`    | `winpeek_windows_list`    |
-| `winpeek windows focused` | `winpeek_windows_focused` |
-| `winpeek capture image`   | `winpeek_capture_image`   |
-| `winpeek uia snapshot`    | `winpeek_uia_snapshot`    |
-| `winpeek see`             | `winpeek_see`             |
-| `winpeek find`            | `winpeek_find`            |
-| `winpeek element get`     | `winpeek_element_get`     |
-| `winpeek click`           | `winpeek_click`           |
-| `winpeek invoke`          | `winpeek_invoke`          |
-| `winpeek set-value`       | `winpeek_set_value`       |
-| `winpeek type`            | `winpeek_type`            |
-| `winpeek scroll`          | `winpeek_scroll`          |
-| `winpeek hotkey`          | `winpeek_hotkey`          |
-| `winpeek observe`         | `winpeek_observe`         |
-| `winpeek wait`            | `winpeek_wait`            |
-| `winpeek batch`           | `winpeek_batch`           |
+| `peeku doctor`          | `peeku_doctor`          |
+| `peeku windows list`    | `peeku_windows_list`    |
+| `peeku windows focused` | `peeku_windows_focused` |
+| `peeku capture image`   | `peeku_capture_image`   |
+| `peeku uia snapshot`    | `peeku_uia_snapshot`    |
+| `peeku see`             | `peeku_see`             |
+| `peeku find`            | `peeku_find`            |
+| `peeku element get`     | `peeku_element_get`     |
+| `peeku click`           | `peeku_click`           |
+| `peeku invoke`          | `peeku_invoke`          |
+| `peeku set-value`       | `peeku_set_value`       |
+| `peeku type`            | `peeku_type`            |
+| `peeku scroll`          | `peeku_scroll`          |
+| `peeku hotkey`          | `peeku_hotkey`          |
+| `peeku observe`         | `peeku_observe`         |
+| `peeku wait`            | `peeku_wait`            |
+| `peeku batch`           | `peeku_batch`           |
 
 > Implementation note: the MCP C# SDK supports exposing methods as tools and generating `inputSchema` from parameters. ([Model Context Protocol][9])
 
@@ -443,7 +443,7 @@ Below are **concrete JSON Schema** definitions for each tool. (All are “type: 
 
 ---
 
-### Tool: `winpeek_doctor`
+### Tool: `peeku_doctor`
 
 **inputSchema**
 
@@ -483,7 +483,7 @@ Below are **concrete JSON Schema** definitions for each tool. (All are “type: 
 
 ---
 
-### Tool: `winpeek_windows_list`
+### Tool: `peeku_windows_list`
 
 **inputSchema**
 
@@ -526,7 +526,7 @@ Below are **concrete JSON Schema** definitions for each tool. (All are “type: 
 
 ---
 
-### Tool: `winpeek_windows_focused`
+### Tool: `peeku_windows_focused`
 
 **inputSchema**
 
@@ -559,7 +559,7 @@ Below are **concrete JSON Schema** definitions for each tool. (All are “type: 
 
 ---
 
-### Tool: `winpeek_capture_image`
+### Tool: `peeku_capture_image`
 
 This returns **either** a `resource_link` to a file and/or an MCP `"image"` content block (base64). MCP supports image blocks. ([Model Context Protocol][8])
 
@@ -601,7 +601,7 @@ This returns **either** a `resource_link` to a file and/or an MCP `"image"` cont
 
 ---
 
-### Tool: `winpeek_uia_snapshot`
+### Tool: `peeku_uia_snapshot`
 
 **inputSchema**
 
@@ -638,7 +638,7 @@ This returns **either** a `resource_link` to a file and/or an MCP `"image"` cont
 
 ---
 
-### Tool: `winpeek_see` (capture + UIA snapshot)
+### Tool: `peeku_see` (capture + UIA snapshot)
 
 **inputSchema**
 
@@ -684,7 +684,7 @@ This returns **either** a `resource_link` to a file and/or an MCP `"image"` cont
 
 ---
 
-### Tool: `winpeek_find`
+### Tool: `peeku_find`
 
 **inputSchema**
 
@@ -730,7 +730,7 @@ This returns **either** a `resource_link` to a file and/or an MCP `"image"` cont
 
 ---
 
-### Tool: `winpeek_element_get`
+### Tool: `peeku_element_get`
 
 **inputSchema**
 
@@ -770,7 +770,7 @@ Rules:
 
 ---
 
-### Tool: `winpeek_click`
+### Tool: `peeku_click`
 
 **inputSchema**
 
@@ -803,7 +803,7 @@ Rules:
 
 ---
 
-### Tool: `winpeek_invoke`
+### Tool: `peeku_invoke`
 
 **inputSchema**
 
@@ -818,11 +818,11 @@ Rules:
 }
 ```
 
-**outputSchema** = same as `winpeek_click` (but `methodUsed` likely `"uia.invoke"`)
+**outputSchema** = same as `peeku_click` (but `methodUsed` likely `"uia.invoke"`)
 
 ---
 
-### Tool: `winpeek_set_value`
+### Tool: `peeku_set_value`
 
 **inputSchema**
 
@@ -855,7 +855,7 @@ Rules:
 
 ---
 
-### Tool: `winpeek_type`
+### Tool: `peeku_type`
 
 **inputSchema**
 
@@ -889,7 +889,7 @@ Rules:
 
 ---
 
-### Tool: `winpeek_scroll`
+### Tool: `peeku_scroll`
 
 **inputSchema**
 
@@ -911,7 +911,7 @@ Rules:
 
 ---
 
-### Tool: `winpeek_hotkey`
+### Tool: `peeku_hotkey`
 
 **inputSchema**
 
@@ -929,7 +929,7 @@ Rules:
 
 ---
 
-### Tool: `winpeek_observe` (bounded long-poll)
+### Tool: `peeku_observe` (bounded long-poll)
 
 Because MCP tools are request/response, v1 should be a **bounded observation** tool:
 
@@ -985,7 +985,7 @@ Because MCP tools are request/response, v1 should be a **bounded observation** t
 
 ---
 
-### Tool: `winpeek_wait`
+### Tool: `peeku_wait`
 
 **inputSchema**
 
@@ -1021,7 +1021,7 @@ Because MCP tools are request/response, v1 should be a **bounded observation** t
 
 ---
 
-### Tool: `winpeek_batch`
+### Tool: `peeku_batch`
 
 **inputSchema**
 
@@ -1100,11 +1100,11 @@ For capture tools, optionally include `"type": "image"` content blocks (base64 p
 
 ## 6) “Single source of truth” implementation strategy (prevents drift)
 
-To guarantee CLI ↔ MCP 1:1 mirroring, implement **ToolDescriptors** in `WinPeek.Core`:
+To guarantee CLI ↔ MCP 1:1 mirroring, implement **ToolDescriptors** in `peeku.Core`:
 
 ```csharp
 public record ToolDescriptor(
-    string Name,           // winpeek_capture_image
+    string Name,           // peeku_capture_image
     string Title,
     string Description,
     JsonDocument InputSchema,
@@ -1129,9 +1129,9 @@ Even if you use `McpServerToolAttribute` to generate schemas automatically, keep
 
 If you follow the phase plan you already approved, you’ll get:
 
-* Phase 1: `winpeek capture image` works on real machines (WGC-based). ([GitHub][2])
-* Phase 2–4: `winpeek uia snapshot`, `find`, `click`, `set-value` works using FlaUI across Win32/WPF/etc. ([GitHub][4])
-* Phase 7: `winpeek mcp serve` exposes the exact same operations as MCP tools, with schemas per MCP spec. ([Model Context Protocol][8])
+* Phase 1: `peeku capture image` works on real machines (WGC-based). ([GitHub][2])
+* Phase 2–4: `peeku uia snapshot`, `find`, `click`, `set-value` works using FlaUI across Win32/WPF/etc. ([GitHub][4])
+* Phase 7: `peeku mcp serve` exposes the exact same operations as MCP tools, with schemas per MCP spec. ([Model Context Protocol][8])
 
 ---
 
