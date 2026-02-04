@@ -15,6 +15,10 @@
     <PackageVersion Include="FlaUI.Core.Signed" Version="5.0.0" />
     <PackageVersion Include="FlaUI.UIA3.Signed" Version="5.0.0" />
 
+    <!-- Core (Capture / WGC) -->
+    <PackageVersion Include="Vortice.Direct3D11" Version="3.8.2" />
+    <PackageVersion Include="Vortice.DXGI" Version="3.8.2" />
+
     <!-- MCP -->
     <PackageVersion Include="ModelContextProtocol" Version="0.7.0-preview.1" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
