@@ -9,7 +9,7 @@
     <PackageVersion Include="Serilog" Version="4.3.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
+    <PackageVersion Include="Serilog.Formatting.Compact" Version="2.0.0" />
 
     <!-- Core (UIA) -->
     <PackageVersion Include="FlaUI.Core.Signed" Version="5.0.0" />
@@ -21,4 +21,3 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.2" />
   </ItemGroup>
 </Project>
-
