@@ -4,4 +4,7 @@
     <Project Path="src/peeku.Core/peeku.Core.csproj" />
     <Project Path="src/peeku.Mcp/peeku.Mcp.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/peeku.Core.Tests/peeku.Core.Tests.csproj" />
+  </Folder>
 </Solution>
