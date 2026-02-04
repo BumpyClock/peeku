@@ -75,7 +75,7 @@ public sealed class WindowsClient : IPeekuClient
     => CaptureImage.CaptureImageAsync(req, ct);
 
   public Task<UiaSnapshotResult> UiaSnapshotAsync(UiaSnapshotRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().UiaSnapshotAsync(req, ct);
 
   public async Task<SeeResult> SeeAsync(SeeRequest req, CancellationToken ct = default)
   {
@@ -309,22 +309,22 @@ public sealed class WindowsClient : IPeekuClient
     => new UiaClient().ElementGetAsync(req, ct);
 
   public Task<ActionResult> ClickAsync(ClickRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().ClickAsync(req, ct);
 
   public Task<ActionResult> InvokeAsync(InvokeRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().InvokeAsync(req, ct);
 
   public Task<ActionResult> SetValueAsync(SetValueRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().SetValueAsync(req, ct);
 
   public Task<ActionResult> TypeAsync(TypeRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().TypeAsync(req, ct);
 
   public Task<ActionResult> ScrollAsync(ScrollRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().ScrollAsync(req, ct);
 
   public Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().HotkeyAsync(req, ct);
 
   public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default)
     => UiaObserve.ObserveAsync(req, ct);
@@ -333,7 +333,7 @@ public sealed class WindowsClient : IPeekuClient
     => new UiaClient().WaitAsync(req, ct);
 
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => BatchRunner.RunAsync(this, req, ct);
 
   private static string? CombineWarnings(string? a, string? b)
   {
