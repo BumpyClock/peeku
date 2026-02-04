@@ -330,7 +330,7 @@ public sealed class WindowsClient : IPeekuClient
     => UiaObserve.ObserveAsync(req, ct);
 
   public Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => new UiaClient().WaitAsync(req, ct);
 
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();

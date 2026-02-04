@@ -425,7 +425,7 @@ public sealed partial class UiaClient : IPeekuClient
     => throw new NotImplementedException();
 
   public Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => UiaWait.WaitAsync(req, UiaSnapshotAsync, ct);
 
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
