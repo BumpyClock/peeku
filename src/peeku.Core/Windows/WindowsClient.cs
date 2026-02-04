@@ -327,7 +327,7 @@ public sealed class WindowsClient : IPeekuClient
     => throw new NotImplementedException();
 
   public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
+    => UiaObserve.ObserveAsync(req, ct);
 
   public Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
