@@ -27,3 +27,10 @@ Date: 2026-02-04
 - WinRT / WGC: rely on Windows-targeted TFM + SDK-provided WinRT projections; add explicit Windows SDK ref package only if we hit missing API surface.
 - MCP SDK currently preview; expect churn; keep tool surface behind our own adapters (`ToolDescriptor` plan in PRD).
 
+## Refs
+
+- NuGet: System.CommandLine https://www.nuget.org/packages/System.CommandLine
+- NuGet: Serilog https://www.nuget.org/packages/Serilog
+- NuGet: Serilog.Sinks.File https://www.nuget.org/packages/Serilog.Sinks.File
+- NuGet: FlaUI.Core.Signed https://www.nuget.org/packages/FlaUI.Core.Signed
+- NuGet: ModelContextProtocol https://www.nuget.org/packages/ModelContextProtocol
