@@ -6,5 +6,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/peeku.Core.Tests/peeku.Core.Tests.csproj" />
+    <Project Path="tests/peeku.Mcp.Tests/peeku.Mcp.Tests.csproj" />
   </Folder>
 </Solution>
