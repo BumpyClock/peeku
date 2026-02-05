@@ -1,6 +1,8 @@
 # peeku
 
-Windows UI automation + capture tooling.
+**Windows UI automation + capture tooling.**
+
+The goal for peeku is to provide a simple CLI + MCP interface to interact with Windows OS and Apps. It provides a simple API and CLI interface that you can use in scripting or with AI agents to allow them to interact with Windows , and installed Apps. This is in active development so expect breaking changes. 
 
 - Library-first: `src/peeku.Core`
 - CLI: `src/peeku.Cli`
