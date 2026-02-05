@@ -62,65 +62,144 @@ public sealed partial class UiaClient
       if (hasRefId)
       {
         refId = req.Element!.RefId.Trim();
+        snapshotId = req.Element!.SnapshotId?.Trim() ?? "";
       }
       else
       {
-        var snapshot = await UiaSnapshotAsync(
-          new UiaSnapshotRequest(
-            Target: targetUsed,
-            Depth: 6,
-            MaxNodes: 5000,
-            IncludeProperties: UiaPropertiesMode.All),
-          ct).ConfigureAwait(false);
-
-        if (!snapshot.Ok)
+        if (!req.Selector!.PreferCachedSnapshot)
         {
-          return new ElementGetResult(
-            Ok: false,
-            Meta: scope.Meta(warning: snapshot.Meta.Warning),
-            Element: new UiaElement(new ElementRef("")),
-            Properties: new Dictionary<string, object?>(),
-            Patterns: Array.Empty<string>(),
-            Rect: null,
-            Error: snapshot.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "UIA snapshot failed."));
+          using var liveAutomation = new UIA3Automation();
+          var liveRoot = ResolveRoot(targetUsed, liveAutomation, ct, out var liveRootWarning);
+          if (liveRoot is null)
+          {
+            var code = liveRootWarning is not null && liveRootWarning.Contains("not supported", StringComparison.OrdinalIgnoreCase)
+              ? PeekuErrorCode.NotSupported
+              : PeekuErrorCode.WindowNotFound;
+
+            return new ElementGetResult(
+              Ok: false,
+              Meta: scope.Meta(warning: liveRootWarning),
+              Element: new UiaElement(new ElementRef("")),
+              Properties: new Dictionary<string, object?>(),
+              Patterns: Array.Empty<string>(),
+              Rect: null,
+              Error: PeekuErrors.Create(code, "Target window not found."));
+          }
+
+          selectorWarning = liveRootWarning;
+
+          IReadOnlyList<AutomationElement> matches;
+          try
+          {
+            matches = UiaLiveSelectors.Select(liveRoot, req.Selector!, limit: 1, ct);
+          }
+          catch (ArgumentException ex)
+          {
+            return new ElementGetResult(
+              Ok: false,
+              Meta: scope.Meta(warning: selectorWarning),
+              Element: new UiaElement(new ElementRef("")),
+              Properties: new Dictionary<string, object?>(),
+              Patterns: Array.Empty<string>(),
+              Rect: null,
+              Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Invalid selector.", new { selector = req.Selector!.Expr, error = ex.Message }));
+          }
+
+          if (matches.Count == 0)
+          {
+            return new ElementGetResult(
+              Ok: false,
+              Meta: scope.Meta(warning: selectorWarning),
+              Element: new UiaElement(new ElementRef("")),
+              Properties: new Dictionary<string, object?>(),
+              Patterns: Array.Empty<string>(),
+              Rect: null,
+              Error: PeekuErrors.Create(
+                PeekuErrorCode.ElementNotFound,
+                "Selector did not match any elements.",
+                new { selector = req.Selector!.Expr, target = targetUsed }));
+          }
+
+          var match = matches[0];
+
+          try
+          {
+            refId = UiaRefId.Create(match);
+          }
+          catch (Exception ex)
+          {
+            return new ElementGetResult(
+              Ok: false,
+              Meta: scope.Meta(warning: selectorWarning),
+              Element: new UiaElement(new ElementRef("")),
+              Properties: new Dictionary<string, object?>(),
+              Patterns: Array.Empty<string>(),
+              Rect: null,
+              Error: PeekuErrors.Create(
+                PeekuErrorCode.Internal,
+                "Failed to compute element refId.",
+                new { exception = ex.GetType().FullName, ex.Message, ex.HResult }));
+          }
         }
-
-        snapshotId = snapshot.SnapshotId;
-        selectorWarning = snapshot.Meta.Warning;
-
-        IReadOnlyList<ElementRef> matches;
-        try
+        else
         {
-          matches = UiaSelectors.Select(snapshot, req.Selector!, limit: 1);
-        }
-        catch (ArgumentException ex)
-        {
-          return new ElementGetResult(
-            Ok: false,
-            Meta: scope.Meta(warning: selectorWarning),
-            Element: new UiaElement(new ElementRef("")),
-            Properties: new Dictionary<string, object?>(),
-            Patterns: Array.Empty<string>(),
-            Rect: null,
-            Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Invalid selector.", new { selector = req.Selector!.Expr, error = ex.Message }));
-        }
+          var snapshot = await UiaSnapshotAsync(
+            new UiaSnapshotRequest(
+              Target: targetUsed,
+              Depth: 6,
+              MaxNodes: 5000,
+              IncludeProperties: UiaPropertiesMode.All),
+            ct).ConfigureAwait(false);
 
-        if (matches.Count == 0)
-        {
-          return new ElementGetResult(
-            Ok: false,
-            Meta: scope.Meta(warning: selectorWarning),
-            Element: new UiaElement(new ElementRef("")),
-            Properties: new Dictionary<string, object?>(),
-            Patterns: Array.Empty<string>(),
-            Rect: null,
-            Error: PeekuErrors.Create(
-              PeekuErrorCode.ElementNotFound,
-              "Selector did not match any elements.",
-              new { selector = req.Selector!.Expr, target = targetUsed }));
-        }
+          if (!snapshot.Ok)
+          {
+            return new ElementGetResult(
+              Ok: false,
+              Meta: scope.Meta(warning: snapshot.Meta.Warning),
+              Element: new UiaElement(new ElementRef("")),
+              Properties: new Dictionary<string, object?>(),
+              Patterns: Array.Empty<string>(),
+              Rect: null,
+              Error: snapshot.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "UIA snapshot failed."));
+          }
 
-        refId = matches[0].RefId;
+          snapshotId = snapshot.SnapshotId;
+          selectorWarning = snapshot.Meta.Warning;
+
+          IReadOnlyList<ElementRef> matches;
+          try
+          {
+            matches = UiaSelectors.Select(snapshot, req.Selector!, limit: 1);
+          }
+          catch (ArgumentException ex)
+          {
+            return new ElementGetResult(
+              Ok: false,
+              Meta: scope.Meta(warning: selectorWarning),
+              Element: new UiaElement(new ElementRef("")),
+              Properties: new Dictionary<string, object?>(),
+              Patterns: Array.Empty<string>(),
+              Rect: null,
+              Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Invalid selector.", new { selector = req.Selector!.Expr, error = ex.Message }));
+          }
+
+          if (matches.Count == 0)
+          {
+            return new ElementGetResult(
+              Ok: false,
+              Meta: scope.Meta(warning: selectorWarning),
+              Element: new UiaElement(new ElementRef("")),
+              Properties: new Dictionary<string, object?>(),
+              Patterns: Array.Empty<string>(),
+              Rect: null,
+              Error: PeekuErrors.Create(
+                PeekuErrorCode.ElementNotFound,
+                "Selector did not match any elements.",
+                new { selector = req.Selector!.Expr, target = targetUsed }));
+          }
+
+          refId = matches[0].RefId;
+        }
       }
 
       using var automation = new UIA3Automation();

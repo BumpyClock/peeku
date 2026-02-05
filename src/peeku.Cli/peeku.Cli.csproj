@@ -4,6 +4,10 @@
     <ProjectReference Include="..\peeku.Core\peeku.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="Exists('..\\peeku.Daemon\\peeku.Daemon.csproj')">
+    <ProjectReference Include="..\peeku.Daemon\peeku.Daemon.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="Serilog" />
@@ -19,6 +23,10 @@
     <TargetName>peeku</TargetName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="Exists('..\\peeku.Daemon\\peeku.Daemon.csproj')">
+    <DefineConstants>$(DefineConstants);PEEKU_DAEMON</DefineConstants>
   </PropertyGroup>
 
 </Project>

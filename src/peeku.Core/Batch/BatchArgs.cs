@@ -119,7 +119,20 @@ internal static class BatchArgs
       return false;
     }
 
-    selector = new Selector(expr2);
+    var preferCachedSnapshot = true;
+    if (TryGet(selEl, "preferCachedSnapshot", out var preferEl))
+    {
+      if (preferEl.ValueKind == JsonValueKind.True)
+      {
+        preferCachedSnapshot = true;
+      }
+      else if (preferEl.ValueKind == JsonValueKind.False)
+      {
+        preferCachedSnapshot = false;
+      }
+    }
+
+    selector = new Selector(expr2, preferCachedSnapshot);
     return true;
   }
 

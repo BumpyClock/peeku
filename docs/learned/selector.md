@@ -9,11 +9,11 @@ Date: 2026-02-04
 
 ## Supported (current implementation)
 
-File: `src/peeku.Core/Uia/UiaSelectors.cs`
+File: `src/peeku.Core/Uia/UiaSelectorEngine.cs`
 
 Expr: `/`-separated segments. No leading `/`. Whitespace trimmed.
 
-Matches are computed from a **UIA snapshot** (not live UIA). For a live lookup, use selector → snapshot → resolve `refId` → actions.
+Default matching is computed from a **UIA snapshot**. For live UIA evaluation, use `--live` (supported on `find`, `element get`, action `--selector`, and `wait`).
 
 ## Grammar (BNF-ish)
 

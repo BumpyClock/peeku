@@ -1,4 +1,5 @@
 using FlaUI.Core.AutomationElements;
+using FlaUI.UIA3;
 
 namespace peeku;
 
@@ -17,6 +18,12 @@ public sealed partial class UiaClient
     }
 
     return $"{a} {b}";
+  }
+
+  private static (AutomationElement? Root, string? Warning) ResolveRootWithWarning(Target target, UIA3Automation automation, CancellationToken ct)
+  {
+    var root = ResolveRoot(target, automation, ct, out var warning);
+    return (root, warning);
   }
 
   private static AutomationElement? FindByRefId(AutomationElement root, string refId, int maxNodes, CancellationToken ct)

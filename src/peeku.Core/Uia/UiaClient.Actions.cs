@@ -31,7 +31,7 @@ public sealed partial class UiaClient
           Error: routeError);
       }
 
-      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
+      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, ResolveRootWithWarning, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
       if (!resolved.Ok || resolved.Selection is null)
       {
         return new ActionResult(
@@ -133,7 +133,7 @@ public sealed partial class UiaClient
           Error: routeError);
       }
 
-      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
+      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, ResolveRootWithWarning, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
       if (!resolved.Ok || resolved.Selection is null)
       {
         return new ActionResult(
@@ -225,7 +225,7 @@ public sealed partial class UiaClient
           Error: routeError);
       }
 
-      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
+      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, ResolveRootWithWarning, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
       if (!resolved.Ok || resolved.Selection is null)
       {
         return new ActionResult(
@@ -335,7 +335,7 @@ public sealed partial class UiaClient
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "DelayMs must be >= 0."));
       }
 
-      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
+      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, ResolveRootWithWarning, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
       if (!resolved.Ok || resolved.Selection is null)
       {
         return new ActionResult(
@@ -477,7 +477,7 @@ public sealed partial class UiaClient
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Delta must be non-zero."));
       }
 
-      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
+      var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, ResolveRootWithWarning, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
       if (!resolved.Ok || resolved.Selection is null)
       {
         return new ActionResult(

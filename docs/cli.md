@@ -19,6 +19,20 @@ Use before/after subcommands.
 - `--log-file <path>` (optional)
 - `--trace-id <id>` (optional; else generated)
 - `--profile <name>` (reserved; no-op for now)
+- `--server` (run daemon server in foreground)
+- `--daemon` (spawn/stop daemon; see below)
+- `--stop` (stop daemon; requires `--daemon`)
+
+## Daemon (fast mode)
+
+```powershell
+peeku --server
+peeku --daemon
+peeku --daemon --stop
+```
+
+- `--daemon` spawns background daemon and writes `%LOCALAPPDATA%\peeku\daemon.json`
+- When the marker exists, normal CLI commands connect to daemon by default
 
 ## Commands (implemented)
 
@@ -96,6 +110,7 @@ peeku find --selector "window[name~=\"Notepad\"]/edit" --limit 5
 ```
 
 - `--selector <expr>`: selector DSL (see `docs/learned/selector.md`)
+- `--live`: evaluate selector on live UIA tree (no snapshot)
 - `--limit <n>`: max matches (default 20)
 - target flags optional; if omitted, defaults to focused window
 
@@ -108,6 +123,7 @@ peeku element get --selector "window[name~=\"Notepad\"]/edit" --includePropertie
 ```
 
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- `--live`: evaluate selector on live UIA tree (no snapshot)
 - `--includeProperties basic|all` (default all)
 - target flags optional; if omitted, defaults to focused window
 
@@ -119,6 +135,7 @@ peeku click --ref uia:123:abc --method uia
 ```
 
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--method auto|uia|input` (default auto)
 
@@ -129,6 +146,7 @@ peeku invoke --selector "window[name~=\"Notepad\"]/menuitem[name=\"File\"]"
 ```
 
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 
 ### `set-value`
@@ -138,6 +156,7 @@ peeku set-value --selector "window[name~=\"Notepad\"]/edit" --value "hello"
 ```
 
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--value <text>` (required)
 
@@ -149,6 +168,7 @@ peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello" --append f
 ```
 
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--append true|false` (default true)
 
@@ -160,6 +180,7 @@ peeku scroll --selector "window[name~=\"Notepad\"]/edit" --lines -3 --direction 
 ```
 
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - exactly one of `--delta` or `--lines` is required
 - `--direction vertical|horizontal` (default vertical)
@@ -187,6 +208,7 @@ peeku wait --selector "window[name~=\"Notepad\"]/edit" --timeout 00:00:10
 ```
 
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
+- `--live`: event-driven live UIA evaluation for selector (no snapshot)
 - `--timeout` is the global CLI timeout
 
 ### `batch`

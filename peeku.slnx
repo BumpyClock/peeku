@@ -2,10 +2,13 @@
   <Folder Name="/src/">
     <Project Path="src/peeku.Cli/peeku.Cli.csproj" />
     <Project Path="src/peeku.Core/peeku.Core.csproj" />
+    <Project Path="src/peeku.Daemon/peeku.Daemon.csproj" />
     <Project Path="src/peeku.Mcp/peeku.Mcp.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/peeku.Cli.Tests/peeku.Cli.Tests.csproj" />
     <Project Path="tests/peeku.Core.Tests/peeku.Core.Tests.csproj" />
+    <Project Path="tests/peeku.Daemon.Tests/peeku.Daemon.Tests.csproj" />
     <Project Path="tests/peeku.Mcp.Tests/peeku.Mcp.Tests.csproj" />
   </Folder>
 </Solution>

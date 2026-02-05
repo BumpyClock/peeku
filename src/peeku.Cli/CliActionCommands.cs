@@ -283,19 +283,23 @@ internal static class CliActionCommands
   private sealed record SelectionOptions(
     Option<string?> Ref,
     Option<string?> SnapshotId,
-    Option<string?> Selector);
+    Option<string?> Selector,
+    Option<bool> Live);
 
   private static SelectionOptions AddSelectionOptions(Command cmd)
   {
     var refOpt = new Option<string?>("--ref") { Description = "Element refId" };
     var snapshotIdOpt = new Option<string?>("--snapshotId") { Description = "Optional snapshotId for elementRef" };
     var selectorOpt = new Option<string?>("--selector") { Description = "Selector expression" };
+    var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation for selector" };
+    liveOpt.DefaultValueFactory = _ => false;
 
     cmd.Add(refOpt);
     cmd.Add(snapshotIdOpt);
     cmd.Add(selectorOpt);
+    cmd.Add(liveOpt);
 
-    return new SelectionOptions(refOpt, snapshotIdOpt, selectorOpt);
+    return new SelectionOptions(refOpt, snapshotIdOpt, selectorOpt, liveOpt);
   }
 
   private static bool TryParseSelection(
@@ -312,6 +316,7 @@ internal static class CliActionCommands
     var refId = parse.GetValue(o.Ref);
     var snapshotId = parse.GetValue(o.SnapshotId);
     var selectorExpr = parse.GetValue(o.Selector);
+    var live = parse.GetValue(o.Live);
 
     var hasRef = !string.IsNullOrWhiteSpace(refId);
     var hasSelector = !string.IsNullOrWhiteSpace(selectorExpr);
@@ -333,7 +338,7 @@ internal static class CliActionCommands
       return true;
     }
 
-    selector = new Selector((selectorExpr ?? "").Trim());
+    selector = new Selector((selectorExpr ?? "").Trim(), PreferCachedSnapshot: !live);
     return true;
   }
 

@@ -59,12 +59,24 @@ internal static class Program
     var profileOpt = new Option<string?>("--profile") { Description = "Optional profile name (reserved)" };
     profileOpt.Recursive = true;
 
+    var serverOpt = new Option<bool>("--server") { Description = "Run daemon server in foreground" };
+    serverOpt.Recursive = true;
+
+    var daemonOpt = new Option<bool>("--daemon") { Description = "Manage daemon (spawn/stop)" };
+    daemonOpt.Recursive = true;
+
+    var stopOpt = new Option<bool>("--stop") { Description = "Stop daemon (requires --daemon)" };
+    stopOpt.Recursive = true;
+
     root.Add(formatOpt);
     root.Add(timeoutOpt);
     root.Add(logLevelOpt);
     root.Add(logFileOpt);
     root.Add(traceIdOpt);
     root.Add(profileOpt);
+    root.Add(serverOpt);
+    root.Add(daemonOpt);
+    root.Add(stopOpt);
 
     CliCommandTree.AddCommands(root);
 
@@ -94,6 +106,26 @@ internal static class Program
 
     try
     {
+      var runServer = parse.GetValue(serverOpt);
+      var runDaemon = parse.GetValue(daemonOpt);
+      var stopDaemon = parse.GetValue(stopOpt);
+
+      if (runServer)
+      {
+        return await RunServerAsync().ConfigureAwait(false);
+      }
+
+      if (stopDaemon && !runDaemon)
+      {
+        Log.Logger.Error("Stop requested without daemon flag");
+        return 1;
+      }
+
+      if (runDaemon)
+      {
+        return await RunDaemonAsync(stopDaemon).ConfigureAwait(false);
+      }
+
       return await parse.InvokeAsync(
         new InvocationConfiguration
         {
@@ -131,5 +163,90 @@ internal static class Program
     }
 
     return loggerConfig.CreateLogger();
+  }
+
+  private static async Task<int> RunServerAsync()
+  {
+    var runner = new DaemonServerRunner();
+    var pipeName = DefaultPipeName();
+    return await runner.RunAsync(pipeName, CancellationToken.None).ConfigureAwait(false);
+  }
+
+  private static async Task<int> RunDaemonAsync(bool stop)
+  {
+    return stop
+      ? await StopDaemonAsync().ConfigureAwait(false)
+      : await StartDaemonAsync().ConfigureAwait(false);
+  }
+
+  private static async Task<int> StartDaemonAsync()
+  {
+    var ctx = CliContextAccessor.Current;
+    if (DaemonMarker.TryLoad(out var existing))
+    {
+      var pingClient = new DaemonJsonRpcClient(existing.PipeName, ctx.Timeout);
+      using var cts = ctx.Timeout > TimeSpan.Zero ? new CancellationTokenSource(ctx.Timeout) : new CancellationTokenSource();
+      if (await pingClient.TryPingAsync(cts.Token).ConfigureAwait(false))
+      {
+        return 0;
+      }
+    }
+
+    try
+    {
+      var pipeName = DefaultPipeName();
+      var launcher = new DaemonProcessLauncher(Directory.GetCurrentDirectory());
+      var process = launcher.StartBackground(pipeName);
+      var marker = new DaemonMarker(pipeName, process.Id, DateTimeOffset.UtcNow, "1", "unknown");
+      marker.Save();
+      return 0;
+    }
+    catch (Exception ex)
+    {
+      ctx.Logger.Error(ex, "Daemon start failed");
+      return 1;
+    }
+  }
+
+  private static async Task<int> StopDaemonAsync()
+  {
+    var ctx = CliContextAccessor.Current;
+    if (!DaemonMarker.TryLoad(out var marker))
+    {
+      ctx.Logger.Error("Daemon marker not found");
+      return 1;
+    }
+
+    try
+    {
+      var rpc = new DaemonJsonRpcClient(marker.PipeName, ctx.Timeout);
+      using var cts = ctx.Timeout > TimeSpan.Zero ? new CancellationTokenSource(ctx.Timeout) : new CancellationTokenSource();
+      var res = await rpc.CallAsync<DaemonOkResult>("server.shutdown", new Dictionary<string, object?>(), cts.Token).ConfigureAwait(false);
+      if (!res.Ok)
+      {
+        ctx.Logger.Error("Daemon shutdown returned not ok");
+        return 1;
+      }
+
+      var path = DaemonMarker.DefaultPath;
+      if (File.Exists(path))
+      {
+        File.Delete(path);
+      }
+
+      return 0;
+    }
+    catch (Exception ex)
+    {
+      ctx.Logger.Error(ex, "Daemon shutdown failed");
+      return 1;
+    }
+  }
+
+  private static string DefaultPipeName()
+  {
+    var user = Environment.UserName;
+    var safeUser = string.IsNullOrWhiteSpace(user) ? "user" : user.Trim();
+    return $"peeku.{safeUser}.v1";
   }
 }

@@ -85,14 +85,18 @@ internal static class CliFlowCommands
     var selectorOpt = new Option<string>("--selector") { Description = "Selector expression" };
     selectorOpt.Required = true;
 
+    var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation (event-driven) for selector" };
+    liveOpt.DefaultValueFactory = _ => false;
+
     cmd.Add(selectorOpt);
+    cmd.Add(liveOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
 
       var selectorRaw = parse.GetValue(selectorOpt) ?? "";
-      var selector = new Selector(selectorRaw.Trim());
+      var selector = new Selector(selectorRaw.Trim(), PreferCachedSnapshot: !parse.GetValue(liveOpt));
       var target = CliTargets.ParseOrDefaultFocused(parse, targetOpts);
 
       var client = CliPeekuClient.CreateDefault();

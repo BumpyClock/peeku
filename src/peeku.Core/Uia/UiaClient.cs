@@ -422,14 +422,29 @@ public sealed partial class UiaClient : IPeekuClient
   public Task<SeeResult> SeeAsync(SeeRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
 
-  public Task<FindResult> FindAsync(FindRequest req, CancellationToken ct = default)
-    => throw new NotImplementedException();
-
   public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
 
   public Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default)
-    => UiaWait.WaitAsync(req, UiaSnapshotAsync, ct);
+  {
+    if (req is null)
+    {
+      return UiaWait.WaitAsync(req!, UiaSnapshotAsync, ct);
+    }
+
+    if (req.Selector is not null && !req.Selector.PreferCachedSnapshot)
+    {
+      static UiaLiveWait.RootResolution Resolve(Target target, UIA3Automation automation, CancellationToken token)
+      {
+        var root = ResolveRoot(target, automation, token, out var warning);
+        return new UiaLiveWait.RootResolution(root, warning);
+      }
+
+      return UiaLiveWait.WaitAsync(req, Resolve, ct);
+    }
+
+    return UiaWait.WaitAsync(req, UiaSnapshotAsync, ct);
+  }
 
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();

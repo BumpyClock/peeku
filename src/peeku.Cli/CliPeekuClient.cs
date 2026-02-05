@@ -3,17 +3,37 @@ namespace peeku.Cli;
 internal sealed class CliPeekuClient : global::peeku.IPeekuClient
 {
   private readonly global::peeku.IPeekuClient _inner;
+  private readonly string? _warning;
 
-  private CliPeekuClient(global::peeku.IPeekuClient inner)
+  private CliPeekuClient(global::peeku.IPeekuClient inner, string warning)
   {
     _inner = inner;
+    _warning = string.IsNullOrWhiteSpace(warning) ? null : warning.Trim();
   }
 
   internal static global::peeku.IPeekuClient CreateDefault()
-    => new CliPeekuClient(new global::peeku.WindowsClient());
+  {
+    if (!DaemonMarker.TryLoad(out var marker))
+    {
+      return new CliPeekuClient(new global::peeku.WindowsClient(), "");
+    }
+
+    var ctx = CliContextAccessor.Current;
+    var rpc = new DaemonJsonRpcClient(marker.PipeName, ctx.Timeout);
+    using var cts = ctx.Timeout > TimeSpan.Zero ? new CancellationTokenSource(ctx.Timeout) : new CancellationTokenSource();
+    var pingOk = rpc.TryPingAsync(cts.Token).GetAwaiter().GetResult();
+    if (pingOk)
+    {
+      return new CliPeekuClient(new DaemonPeekuClient(rpc), "");
+    }
+
+    var warning = "Daemon unreachable; fell back to in-proc";
+    var fallback = new WarningPeekuClient(new global::peeku.WindowsClient(), warning);
+    return new CliPeekuClient(fallback, warning);
+  }
 
   public Task<global::peeku.DoctorResult> DoctorAsync(global::peeku.DoctorRequest req, CancellationToken ct = default)
-    => CliDoctor.DoctorAsync(_inner, req, ct);
+    => CliDoctor.DoctorAsync(_inner, req, _warning ?? "", ct);
 
   public Task<global::peeku.WindowListResult> WindowsListAsync(global::peeku.WindowsListRequest req, CancellationToken ct = default)
     => _inner.WindowsListAsync(req, ct);
@@ -69,6 +89,7 @@ internal static class CliDoctor
   internal static async Task<global::peeku.DoctorResult> DoctorAsync(
     global::peeku.IPeekuClient client,
     global::peeku.DoctorRequest req,
+    string warning,
     CancellationToken ct)
   {
     var ctx = CliContextAccessor.Current;
@@ -137,25 +158,28 @@ internal static class CliDoctor
       }
 
       var ok = checks.All(c => c.Ok);
+      var meta = warning.Length == 0 ? scope.Meta() : scope.Meta(warning);
       return new global::peeku.DoctorResult(
         Ok: ok,
-        Meta: scope.Meta(),
+        Meta: meta,
         Checks: checks,
         Error: ok ? null : global::peeku.PeekuErrors.Create(global::peeku.PeekuErrorCode.Unavailable, "One or more checks failed"));
     }
     catch (OperationCanceledException)
     {
+      var meta = warning.Length == 0 ? scope.Meta() : scope.Meta(warning);
       return new global::peeku.DoctorResult(
         Ok: false,
-        Meta: scope.Meta(),
+        Meta: meta,
         Checks: Array.Empty<global::peeku.DoctorCheck>(),
         Error: global::peeku.PeekuErrors.Create(global::peeku.PeekuErrorCode.Canceled, "Operation cancelled"));
     }
     catch (Exception ex)
     {
+      var meta = warning.Length == 0 ? scope.Meta() : scope.Meta(warning);
       return new global::peeku.DoctorResult(
         Ok: false,
-        Meta: scope.Meta(),
+        Meta: meta,
         Checks: Array.Empty<global::peeku.DoctorCheck>(),
         Error: global::peeku.PeekuErrors.Create(
           global::peeku.PeekuErrorCode.Internal,

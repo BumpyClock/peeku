@@ -137,10 +137,14 @@ internal static class CliUiaCommands
     var selectorOpt = new Option<string>("--selector") { Description = "Selector expression" };
     selectorOpt.Required = true;
 
+    var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation for selector" };
+    liveOpt.DefaultValueFactory = _ => false;
+
     var limitOpt = new Option<int>("--limit") { Description = "Max matches" };
     limitOpt.DefaultValueFactory = _ => 20;
 
     cmd.Add(selectorOpt);
+    cmd.Add(liveOpt);
     cmd.Add(limitOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
@@ -149,7 +153,7 @@ internal static class CliUiaCommands
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
       var selectorRaw = parse.GetValue(selectorOpt) ?? "";
-      var selector = new Selector(selectorRaw.Trim());
+      var selector = new Selector(selectorRaw.Trim(), PreferCachedSnapshot: !parse.GetValue(liveOpt));
       var target = CliTargets.ParseOptional(parse, targetOpts);
 
       var req = new FindRequest(
@@ -183,6 +187,8 @@ internal static class CliUiaCommands
     var snapshotIdOpt = new Option<string?>("--snapshotId") { Description = "Optional snapshotId for elementRef" };
 
     var selectorOpt = new Option<string?>("--selector") { Description = "Selector expression" };
+    var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation for selector" };
+    liveOpt.DefaultValueFactory = _ => false;
 
     var propsOpt = new Option<string>("--includeProperties") { Description = "basic|all" };
     propsOpt.DefaultValueFactory = _ => "all";
@@ -199,6 +205,7 @@ internal static class CliUiaCommands
     cmd.Add(refOpt);
     cmd.Add(snapshotIdOpt);
     cmd.Add(selectorOpt);
+    cmd.Add(liveOpt);
     cmd.Add(propsOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
@@ -211,7 +218,7 @@ internal static class CliUiaCommands
       var selectorExpr = parse.GetValue(selectorOpt);
 
       var elementRef = string.IsNullOrWhiteSpace(refId) ? null : new ElementRef(refId!.Trim(), string.IsNullOrWhiteSpace(snapshotId) ? null : snapshotId!.Trim());
-      var selector = string.IsNullOrWhiteSpace(selectorExpr) ? null : new Selector(selectorExpr!.Trim());
+      var selector = string.IsNullOrWhiteSpace(selectorExpr) ? null : new Selector(selectorExpr!.Trim(), PreferCachedSnapshot: !parse.GetValue(liveOpt));
 
       var target = CliTargets.ParseOptional(parse, targetOpts);
       var props = ParseProps(parse.GetValue(propsOpt));

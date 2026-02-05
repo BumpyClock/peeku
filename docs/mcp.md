@@ -82,6 +82,9 @@ These are `arguments` passed to MCP `tools/call` for the named tool.
 }
 ```
 
+Notes:
+- `selector.preferCachedSnapshot` (optional, default `true`): set `false` for live UIA evaluation (no snapshot)
+
 ### `peeku_click` (activate tabs via UIA)
 
 ```json

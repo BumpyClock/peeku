@@ -10,6 +10,9 @@
 - `snapshotId`: id for a single `uia snapshot` result; for debugging / correlation only.
 - `refId`: best-effort stable identifier for a UIA element. Format: `uia:<pid>:<hash>`.
 
+Note:
+- Live selector mode (`--live`) does not produce a `snapshotId`.
+
 ## How `refId` is derived
 
 File: `src/peeku.Core/Uia/UiaRefId.cs`
@@ -40,4 +43,3 @@ Fallback (when RuntimeId missing):
   - increase snapshot depth
   - loosen selector filters (`~=` instead of `=`)
   - target by `--hwnd` or query to avoid focus drift
-
