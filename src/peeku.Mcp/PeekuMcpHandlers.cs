@@ -33,16 +33,7 @@ public static class PeekuMcpHandlers
     var response = PeekuMcpResponse.Build(name, ok, meta, payload, error);
     var node = JsonSerializer.SerializeToNode(response, JsonOptions);
 
-    var blocks = new List<ContentBlock>();
-    if (node is not null)
-    {
-      blocks.Add(new TextContentBlock { Text = node.ToJsonString(JsonOptions) });
-    }
-
-    if (TryGetPng(payload, out var base64Png, out var mimeType))
-    {
-      blocks.Add(new ImageContentBlock { Data = base64Png, MimeType = mimeType });
-    }
+    var blocks = BuildContentBlocks(node, payload);
 
     return new CallToolResult
     {
@@ -50,6 +41,22 @@ public static class PeekuMcpHandlers
       StructuredContent = node,
       Content = blocks.Count == 0 ? Array.Empty<ContentBlock>() : blocks.ToArray(),
     };
+  }
+
+  internal static List<ContentBlock> BuildContentBlocks(JsonNode? structuredContent, object? payload)
+  {
+    var blocks = new List<ContentBlock>();
+    if (structuredContent is not null)
+    {
+      blocks.Add(new TextContentBlock { Text = structuredContent.ToJsonString(JsonOptions) });
+    }
+
+    if (TryGetPng(payload, out var base64Png, out var mimeType))
+    {
+      blocks.Add(new ImageContentBlock { Data = base64Png, MimeType = mimeType });
+    }
+
+    return blocks;
   }
 
   private static bool TryGetPng(object? payload, out string base64Png, out string mimeType)
