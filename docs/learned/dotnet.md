@@ -5,11 +5,8 @@
 
 ## Findings
 
-- .NET 10.0.2: SDK `10.0.102`, release date 2026-01-13 (matches installed SDK here).
-  - Source: dotnet.microsoft.com (.NET 10 downloads) + dotnet blog (January 2026 servicing).
-- System.CommandLine `2.0.2` updated 2026-01-13.
-  - API differs from older `beta4` docs; use `RootCommand.SetAction(...)`, `Option<T>(name, aliases)` + `DefaultValueFactory`/`Validators`.
-  - Source: NuGet Gallery (System.CommandLine).
+- SDK pinned via `global.json` (use that for builds/tests).
+- CLI uses `System.CommandLine` (current API shape: `Command.SetAction(...)`, `Option<T>.DefaultValueFactory`, `Option.Validators`, `Option.Recursive=true`).
 
 ## Repo decision
 
