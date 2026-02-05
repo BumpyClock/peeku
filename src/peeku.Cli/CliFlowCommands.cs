@@ -115,8 +115,17 @@ internal static class CliFlowCommands
     var inOpt = new Option<string>("--in") { Description = "Path to JSON ops array" };
     inOpt.Required = true;
 
-    var stopOnErrorOpt = new Option<bool>("--stop-on-error") { Description = "Stop on first error" };
-    stopOnErrorOpt.DefaultValueFactory = _ => true;
+    var stopOnErrorOpt = new Option<string>("--stop-on-error") { Description = "true|false" };
+    stopOnErrorOpt.DefaultValueFactory = _ => "true";
+    stopOnErrorOpt.Validators.Add(r =>
+    {
+      var v = (r.GetValueOrDefault<string>() ?? "true").Trim();
+      if (!string.Equals(v, "true", StringComparison.OrdinalIgnoreCase) &&
+          !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase))
+      {
+        r.AddError("Invalid --stop-on-error. Allowed: true|false");
+      }
+    });
 
     cmd.Add(inOpt);
     cmd.Add(stopOnErrorOpt);
@@ -194,10 +203,13 @@ internal static class CliFlowCommands
           ops.Add(new BatchOp(tool.Trim(), args));
         }
 
+        var stopOnErrorRaw = parse.GetValue(stopOnErrorOpt) ?? "true";
+        var stopOnError = !string.Equals(stopOnErrorRaw.Trim(), "false", StringComparison.OrdinalIgnoreCase);
+
         var client = CliPeekuClient.CreateDefault();
         var res = await client.BatchAsync(new BatchRequest(
           Ops: ops,
-          StopOnError: parse.GetValue(stopOnErrorOpt)), cts.Token).ConfigureAwait(false);
+          StopOnError: stopOnError), cts.Token).ConfigureAwait(false);
 
         CliOutput.Write(res, ctx.Format);
         return res.Ok ? 0 : 1;

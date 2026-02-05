@@ -143,8 +143,17 @@ internal static class CliActionCommands
     var textOpt = new Option<string>("--text") { Description = "Text to type" };
     textOpt.Required = true;
 
-    var appendOpt = new Option<bool>("--append") { Description = "Append to existing value" };
-    appendOpt.DefaultValueFactory = _ => true;
+    var appendOpt = new Option<string>("--append") { Description = "true|false" };
+    appendOpt.DefaultValueFactory = _ => "true";
+    appendOpt.Validators.Add(r =>
+    {
+      var v = (r.GetValueOrDefault<string>() ?? "true").Trim();
+      if (!string.Equals(v, "true", StringComparison.OrdinalIgnoreCase) &&
+          !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase))
+      {
+        r.AddError("Invalid --append. Allowed: true|false");
+      }
+    });
 
     var delayOpt = new Option<int?>("--delay-ms") { Description = "Optional inter-key delay (ms)" };
 
@@ -165,13 +174,16 @@ internal static class CliActionCommands
 
       var text = parse.GetValue(textOpt) ?? "";
 
+      var appendRaw = parse.GetValue(appendOpt) ?? "true";
+      var append = !string.Equals(appendRaw.Trim(), "false", StringComparison.OrdinalIgnoreCase);
+
       var client = CliPeekuClient.CreateDefault();
       var res = await client.TypeAsync(new TypeRequest(
         Element: elementRef,
         Selector: selector,
         Target: CliTargets.ParseOptional(parse, targetOpts),
         Text: text,
-        Append: parse.GetValue(appendOpt),
+        Append: append,
         DelayMs: parse.GetValue(delayOpt)), cts.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);

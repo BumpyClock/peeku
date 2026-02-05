@@ -119,7 +119,7 @@ peeku click --ref uia:123:abc --method uia
 ```
 
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
-- target flags optional; if omitted, defaults to focused window
+- target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--method auto|uia|input` (default auto)
 
 ### `invoke`
@@ -128,11 +128,18 @@ peeku click --ref uia:123:abc --method uia
 peeku invoke --selector "window[name~=\"Notepad\"]/menuitem[name=\"File\"]"
 ```
 
+- `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
+
 ### `set-value`
 
 ```powershell
 peeku set-value --selector "window[name~=\"Notepad\"]/edit" --value "hello"
 ```
+
+- `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
+- `--value <text>` (required)
 
 ### `type`
 
@@ -141,6 +148,10 @@ peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello"
 peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello" --append false --delay-ms 10
 ```
 
+- `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
+- `--append true|false` (default true)
+
 ### `scroll`
 
 ```powershell
@@ -148,6 +159,8 @@ peeku scroll --selector "window[name~=\"Notepad\"]/edit" --delta 120
 peeku scroll --selector "window[name~=\"Notepad\"]/edit" --lines -3 --direction vertical
 ```
 
+- `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - exactly one of `--delta` or `--lines` is required
 - `--direction vertical|horizontal` (default vertical)
 
@@ -163,6 +176,7 @@ peeku hotkey --keys "CTRL+SHIFT+S"
 peeku observe --events focus --duration 00:00:05 --max-events 50
 ```
 
+- target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--events structure|property|focus|all` (default all; v1 currently supports focus)
 - output: JSON array of events
 
@@ -172,6 +186,7 @@ peeku observe --events focus --duration 00:00:05 --max-events 50
 peeku wait --selector "window[name~=\"Notepad\"]/edit" --timeout 00:00:10
 ```
 
+- target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--timeout` is the global CLI timeout
 
 ### `batch`
@@ -179,6 +194,9 @@ peeku wait --selector "window[name~=\"Notepad\"]/edit" --timeout 00:00:10
 ```powershell
 peeku batch --in ops.json --stop-on-error true
 ```
+
+- `--in <path>` (required): JSON ops array
+- `--stop-on-error true|false` (default true)
 
 `ops.json` format (array):
 
