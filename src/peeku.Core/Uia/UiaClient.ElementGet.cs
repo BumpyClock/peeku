@@ -211,7 +211,7 @@ public sealed partial class UiaClient
     d["className"] = Safe(() => element.ClassName);
     d["frameworkId"] = Safe(() => element.Properties.FrameworkId.ValueOrDefault);
     d["processId"] = Safe(() => element.Properties.ProcessId.ValueOrDefault);
-    d["nativeWindowHandle"] = Safe(() => element.Properties.NativeWindowHandle.ValueOrDefault);
+    d["nativeWindowHandle"] = SafeHwndHex(element);
     d["isEnabled"] = Safe(() => element.IsEnabled);
     d["isOffscreen"] = Safe(() => element.Properties.IsOffscreen.ValueOrDefault);
     d["isKeyboardFocusable"] = Safe(() => element.Properties.IsKeyboardFocusable.ValueOrDefault);
@@ -253,6 +253,20 @@ public sealed partial class UiaClient
     {
       var v = f();
       return v is string s && string.IsNullOrWhiteSpace(s) ? null : v;
+    }
+    catch
+    {
+      return null;
+    }
+  }
+
+  private static string? SafeHwndHex(AutomationElement element)
+  {
+    try
+    {
+      var hwnd = element.Properties.NativeWindowHandle.ValueOrDefault;
+      var value = hwnd == 0 ? 0 : hwnd.ToInt64();
+      return value == 0 ? null : $"0x{value:X}";
     }
     catch
     {

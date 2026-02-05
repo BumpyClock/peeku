@@ -77,6 +77,7 @@ peeku uia snapshot --hwnd 0x000000000001047C --includeProperties all
 - `--depth <n>` (default 6)
 - `--maxNodes <n>` (default 5000)
 - `--includeProperties basic|all` (default basic)
+- tab strips: if `controlType: Tab` has no native UIA name, `name` may be populated as `tabs: ...` from descendant `TabItem` labels (`*` = selected)
 
 ### `see`
 

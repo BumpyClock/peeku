@@ -290,12 +290,16 @@ public sealed partial class UiaClient : IPeekuClient
     try
     {
       var name = element.Name;
-      return string.IsNullOrWhiteSpace(name) ? null : name;
+      if (!string.IsNullOrWhiteSpace(name))
+      {
+        return name;
+      }
     }
     catch
     {
-      return null;
     }
+
+    return UiaNameFallbacks.ReadName(element);
   }
 
   private static string? ReadControlType(AutomationElement element, UiaPropertiesMode mode)
