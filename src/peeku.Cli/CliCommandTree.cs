@@ -10,6 +10,7 @@ internal static class CliCommandTree
     root.Add(CreateDoctorCommand());
     root.Add(CreateWindowsCommand());
     root.Add(CreateCaptureCommand());
+    CliUiaCommands.AddAll(root);
   }
 
   private static Command CreateDoctorCommand()
@@ -60,9 +61,16 @@ internal static class CliCommandTree
       Description = "Filter windows by process name"
     };
 
+    var limitOpt = new Option<int>("--limit")
+    {
+      Description = "Max results"
+    };
+    limitOpt.DefaultValueFactory = _ => 50;
+
     cmd.Add(includeMinimizedOpt);
     cmd.Add(titleContainsOpt);
     cmd.Add(processNameOpt);
+    cmd.Add(limitOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
@@ -73,7 +81,7 @@ internal static class CliCommandTree
       var req = new global::peeku.WindowsListRequest(
         TitleContains: parse.GetValue(titleContainsOpt),
         ProcessName: parse.GetValue(processNameOpt),
-        Limit: 50);
+        Limit: parse.GetValue(limitOpt));
 
       var res = await client.WindowsListAsync(req, cts.Token).ConfigureAwait(false);
 

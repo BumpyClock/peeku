@@ -37,11 +37,13 @@ peeku doctor --deep
 peeku windows list
 peeku windows list --titleContains Edge
 peeku windows list --processName msedge
+peeku windows list --limit 10
 peeku windows list --includeMinimized
 ```
 
 - `--titleContains <text>`: title substring filter
 - `--processName <name>`: process name filter
+- `--limit <n>`: max results (default 50)
 - `--includeMinimized`: include minimized windows (default: minimized skipped; warning added)
 
 ### `windows focused`
@@ -64,14 +66,54 @@ peeku capture image --includeBase64
 - `--out <path>`: output PNG path (default: `%TEMP%\peeku\peeku_capture_<traceId>.png`)
 - `--includeBase64`: include base64 PNG in JSON result
 
+### `uia snapshot`
+
+```powershell
+peeku uia snapshot --depth 2 --maxNodes 500
+peeku uia snapshot --hwnd 0x000000000001047C --includeProperties all
+```
+
+- target flags: `--focused` (default), `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`)
+- `--depth <n>` (default 6)
+- `--maxNodes <n>` (default 5000)
+- `--includeProperties basic|all` (default basic)
+
+### `see`
+
+```powershell
+peeku see --depth 2 --maxNodes 500
+peeku see --includeBase64
+```
+
+- same target + depth/maxNodes/includeProperties as `uia snapshot`
+- `--includeBase64`: include base64 PNG in response
+
+### `find`
+
+```powershell
+peeku find --selector "window[name~=\"Notepad\"]/edit" --limit 5
+```
+
+- `--selector <expr>`: selector DSL (see `docs/learned/selector.md`)
+- `--limit <n>`: max matches (default 20)
+- target flags optional; if omitted, defaults to focused window
+
+### `element get`
+
+```powershell
+peeku element get --ref uia:123:abc --snapshotId <id>
+peeku element get --selector "window"
+peeku element get --selector "window[name~=\"Notepad\"]/edit" --includeProperties all
+```
+
+- `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- `--includeProperties basic|all` (default all)
+- target flags optional; if omitted, defaults to focused window
+
 ## Commands (planned; not implemented yet)
 
 Per `prd.md`:
 
-- `uia snapshot`
-- `see`
-- `find`
-- `element get`
 - `click` / `invoke` / `set-value` / `type` / `scroll` / `hotkey`
 - `observe`
 - `wait`
@@ -81,4 +123,3 @@ Per `prd.md`:
 
 - `0`: ok=true
 - `1`: ok=false
-
