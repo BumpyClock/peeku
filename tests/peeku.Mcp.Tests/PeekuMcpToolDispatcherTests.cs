@@ -62,6 +62,38 @@ public sealed class PeekuMcpToolDispatcherTests
     Assert.Equal(1, client.BatchCalls);
   }
 
+  [Fact]
+  public async Task DispatchAsync_Batch_SkipsNestedBatch()
+  {
+    var client = new FakeClient
+    {
+      BatchHandler = req =>
+      {
+        Assert.Single(req.Ops);
+        Assert.Equal("peeku_windows_focused", req.Ops[0].Tool);
+        Assert.False(req.StopOnError);
+
+        return new BatchResult(
+          Ok: true,
+          Meta: new ResultMeta("bt", DateTimeOffset.UnixEpoch, 1),
+          Results: Array.Empty<BatchStepResult>());
+      },
+    };
+
+    var args = JsonSerializer.SerializeToElement(new
+    {
+      ops = new[] { new { tool = "peeku_windows_focused", args = new { } } },
+      stopOnError = false,
+    });
+
+    var (ok, _, payload, error) = await PeekuMcpToolDispatcher.DispatchAsync(client, "peeku_batch", args, CancellationToken.None);
+
+    Assert.True(ok);
+    Assert.Null(error);
+    Assert.IsType<BatchResult>(payload);
+    Assert.Equal(1, client.BatchCalls);
+  }
+
   private sealed class FakeClient : IPeekuClient
   {
     public int DoctorCalls { get; private set; }
@@ -103,4 +135,3 @@ public sealed class PeekuMcpToolDispatcherTests
     public Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default) => throw new NotImplementedException();
   }
 }
-
