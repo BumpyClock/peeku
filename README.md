@@ -22,6 +22,37 @@ dotnet run --project src/peeku.Cli -c Release -- --format json windows list --li
 dotnet run --project src/peeku.Cli -c Release -- --format json capture image --includeBase64 false
 ```
 
+## CLI quick reference
+
+Run:
+
+```powershell
+dotnet run --project src/peeku.Cli -c Release -- --help
+```
+
+Commands:
+
+- `doctor` — environment self-checks
+- `windows list` — enumerate windows (filters; `--includeMinimized`)
+- `windows focused` — focused window info (HWND, pid, title)
+- `capture image` — screenshot to PNG (`--hwnd`, `--out`, `--includeBase64`)
+- `uia snapshot` — UIA snapshot tree (`--hwnd`/query; `--depth`, `--maxNodes`)
+- `see` — capture + snapshot combined
+- `find` — selector → matches
+- `element get` — selector/ref → properties + patterns
+- `click` / `invoke` / `set-value` / `type` / `scroll` / `hotkey` — actions
+- `observe` — UIA events (v1: focus)
+- `wait` — poll selector until match (uses `--timeout`)
+- `batch` — run JSON ops array (ToolRegistry names)
+
+Examples:
+
+```powershell
+dotnet run --project src/peeku.Cli -c Release -- --format json windows list --processName WindowsTerminal --limit 5
+dotnet run --project src/peeku.Cli -c Release -- --format json uia snapshot --titleContains PowerShell --depth 3 --maxNodes 500
+dotnet run --project src/peeku.Cli -c Release -- --format json click --hwnd 0x0000000000530CB6 --method uia --selector "window/*/*/tab/list/tabitem[name=\"PowerShell\"]"
+```
+
 ## Docs
 
 - CLI: `docs/cli.md`
