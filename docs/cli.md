@@ -111,14 +111,82 @@ peeku element get --selector "window[name~=\"Notepad\"]/edit" --includePropertie
 - `--includeProperties basic|all` (default all)
 - target flags optional; if omitted, defaults to focused window
 
-## Commands (planned; not implemented yet)
+### `click`
 
-Per `prd.md`:
+```powershell
+peeku click --selector "window[name~=\"Notepad\"]/button[name=\"OK\"]"
+peeku click --ref uia:123:abc --method uia
+```
 
-- `click` / `invoke` / `set-value` / `type` / `scroll` / `hotkey`
-- `observe`
-- `wait`
-- `batch`
+- `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
+- target flags optional; if omitted, defaults to focused window
+- `--method auto|uia|input` (default auto)
+
+### `invoke`
+
+```powershell
+peeku invoke --selector "window[name~=\"Notepad\"]/menuitem[name=\"File\"]"
+```
+
+### `set-value`
+
+```powershell
+peeku set-value --selector "window[name~=\"Notepad\"]/edit" --value "hello"
+```
+
+### `type`
+
+```powershell
+peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello"
+peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello" --append false --delay-ms 10
+```
+
+### `scroll`
+
+```powershell
+peeku scroll --selector "window[name~=\"Notepad\"]/edit" --delta 120
+peeku scroll --selector "window[name~=\"Notepad\"]/edit" --lines -3 --direction vertical
+```
+
+- exactly one of `--delta` or `--lines` is required
+- `--direction vertical|horizontal` (default vertical)
+
+### `hotkey`
+
+```powershell
+peeku hotkey --keys "CTRL+SHIFT+S"
+```
+
+### `observe`
+
+```powershell
+peeku observe --events focus --duration 00:00:05 --max-events 50
+```
+
+- `--events structure|property|focus|all` (default all; v1 currently supports focus)
+- output: JSON array of events
+
+### `wait`
+
+```powershell
+peeku wait --selector "window[name~=\"Notepad\"]/edit" --timeout 00:00:10
+```
+
+- `--timeout` is the global CLI timeout
+
+### `batch`
+
+```powershell
+peeku batch --in ops.json --stop-on-error true
+```
+
+`ops.json` format (array):
+
+```json
+[
+  { "tool": "peeku_click", "args": { "selector": { "expr": "window/edit" } } }
+]
+```
 
 ## Exit codes
 

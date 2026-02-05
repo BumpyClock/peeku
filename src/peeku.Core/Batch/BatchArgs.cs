@@ -238,6 +238,7 @@ internal static class BatchArgs
       case "focused":
       case "focusedwindow":
       case "focused_window":
+      case "focused-window":
         target = new Target.FocusedWindow();
         return true;
 
@@ -254,6 +255,8 @@ internal static class BatchArgs
         return true;
 
       case "hwnd":
+      case "window_hwnd":
+      case "window-hwnd":
       case "windowbyhwnd":
         if (obj is null || obj.Value.ValueKind != JsonValueKind.Object)
         {
@@ -272,6 +275,8 @@ internal static class BatchArgs
         return true;
 
       case "query":
+      case "window_query":
+      case "window-query":
       case "windowbyquery":
         if (obj is null || obj.Value.ValueKind != JsonValueKind.Object)
         {
@@ -423,4 +428,3 @@ internal static class BatchArgs
     return (true, hasElement ? element : null, hasSelector ? selector : null, target, null);
   }
 }
-
