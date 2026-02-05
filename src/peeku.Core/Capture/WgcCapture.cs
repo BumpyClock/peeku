@@ -179,13 +179,13 @@ internal static class WgcCapture
       var hr = CreateDirect3D11DeviceFromDXGIDevice(dxgiPtr, out direct3DPtr);
       Marshal.ThrowExceptionForHR(hr);
 
-      return (IDirect3DDevice)Marshal.GetObjectForIUnknown(direct3DPtr);
+      return global::WinRT.MarshalInspectable<IDirect3DDevice>.FromAbi(direct3DPtr);
     }
     finally
     {
       if (direct3DPtr != 0)
       {
-        _ = Marshal.Release(direct3DPtr);
+        global::WinRT.MarshalInspectable<IDirect3DDevice>.DisposeAbi(direct3DPtr);
       }
     }
   }

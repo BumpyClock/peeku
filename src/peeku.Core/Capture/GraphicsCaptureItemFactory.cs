@@ -13,11 +13,13 @@ internal static class GraphicsCaptureItemFactory
     item = null;
     error = null;
 
+    nint factoryPtr = 0;
     try
     {
       ct.ThrowIfCancellationRequested();
 
-      var interop = GetInterop();
+      factoryPtr = GetInteropPtr();
+      var interop = new GraphicsCaptureItemInterop(factoryPtr);
 
       return target switch
       {
@@ -39,12 +41,19 @@ internal static class GraphicsCaptureItemFactory
         PeekuErrorCode.Internal,
         "Failed to create capture item.",
         out error,
-        details: new { exception = ex.GetType().FullName, ex.Message, ex.HResult });
+        details: new { exception = ex.GetType().FullName, ex.Message, ex.HResult, exceptionString = ex.ToString() });
+    }
+    finally
+    {
+      if (factoryPtr != 0)
+      {
+        _ = Marshal.Release(factoryPtr);
+      }
     }
   }
 
   private static bool TryCreateForFocusedWindow(
-    IGraphicsCaptureItemInterop interop,
+    GraphicsCaptureItemInterop interop,
     CancellationToken ct,
     out GraphicsCaptureItem? item,
     out PeekuError? error)
@@ -62,7 +71,7 @@ internal static class GraphicsCaptureItemFactory
   }
 
   private static bool TryCreateForQuery(
-    IGraphicsCaptureItemInterop interop,
+    GraphicsCaptureItemInterop interop,
     WindowQuery query,
     CancellationToken ct,
     out GraphicsCaptureItem? item,
@@ -88,7 +97,7 @@ internal static class GraphicsCaptureItemFactory
   }
 
   private static bool TryCreateForHwnd(
-    IGraphicsCaptureItemInterop interop,
+    GraphicsCaptureItemInterop interop,
     string hwndHex,
     out GraphicsCaptureItem? item,
     out PeekuError? error)
@@ -101,13 +110,37 @@ internal static class GraphicsCaptureItemFactory
       return Fail(PeekuErrorCode.InvalidArgument, "Invalid hwndHex.", out error, details: new { hwndHex });
     }
 
-    var iid = typeof(GraphicsCaptureItem).GUID;
-    item = interop.CreateForWindow(hwnd, ref iid);
-    return true;
+    var iid = IGraphicsCaptureItemIid;
+    var hr = interop.CreateForWindow(hwnd, ref iid, out var itemPtr);
+    if (hr < 0)
+    {
+      var hrHex = $"0x{(hr & 0xFFFFFFFF):X8}";
+      var hrMessage = Marshal.GetExceptionForHR(hr)?.Message;
+      return Fail(PeekuErrorCode.Internal, "CreateForWindow failed.", out error, details: new { hwndHex, hr, hrHex, hrMessage, iid = iid.ToString("D") });
+    }
+
+    try
+    {
+      if (itemPtr == 0)
+      {
+        return Fail(PeekuErrorCode.Internal, "CreateForWindow returned null item.", out error, details: new { hwndHex, hr });
+      }
+
+      item = global::WinRT.MarshalInspectable<GraphicsCaptureItem>.FromAbi(itemPtr);
+
+      return true;
+    }
+    finally
+    {
+      if (itemPtr != 0)
+      {
+        global::WinRT.MarshalInspectable<GraphicsCaptureItem>.DisposeAbi(itemPtr);
+      }
+    }
   }
 
   private static bool TryCreateForScreenIndex(
-    IGraphicsCaptureItemInterop interop,
+    GraphicsCaptureItemInterop interop,
     int screenIndex,
     out GraphicsCaptureItem? item,
     out PeekuError? error)
@@ -121,13 +154,36 @@ internal static class GraphicsCaptureItemFactory
       return Fail(PeekuErrorCode.InvalidArgument, "Invalid screen index.", out error, details: new { screenIndex, count = monitors.Count });
     }
 
-    var iid = typeof(GraphicsCaptureItem).GUID;
-    item = interop.CreateForMonitor(monitors[screenIndex], ref iid);
-    return true;
+    var iid = IGraphicsCaptureItemIid;
+    var hr = interop.CreateForMonitor(monitors[screenIndex], ref iid, out var itemPtr);
+    if (hr < 0)
+    {
+      var hrHex = $"0x{(hr & 0xFFFFFFFF):X8}";
+      var hrMessage = Marshal.GetExceptionForHR(hr)?.Message;
+      return Fail(PeekuErrorCode.Internal, "CreateForMonitor failed.", out error, details: new { screenIndex, hr, hrHex, hrMessage });
+    }
+
+    try
+    {
+      item = Marshal.GetObjectForIUnknown(itemPtr) as GraphicsCaptureItem;
+      if (item is null)
+      {
+        return Fail(PeekuErrorCode.Internal, "CreateForMonitor returned null.", out error, details: new { screenIndex });
+      }
+
+      return true;
+    }
+    finally
+    {
+      if (itemPtr != 0)
+      {
+        _ = Marshal.Release(itemPtr);
+      }
+    }
   }
 
   private static bool TryCreateForPrimaryMonitor(
-    IGraphicsCaptureItemInterop interop,
+    GraphicsCaptureItemInterop interop,
     out GraphicsCaptureItem? item,
     out PeekuError? error)
   {
@@ -140,12 +196,35 @@ internal static class GraphicsCaptureItemFactory
       return Fail(PeekuErrorCode.Unavailable, "Primary monitor not found.", out error);
     }
 
-    var iid = typeof(GraphicsCaptureItem).GUID;
-    item = interop.CreateForMonitor(monitor, ref iid);
-    return true;
+    var iid = IGraphicsCaptureItemIid;
+    var hr = interop.CreateForMonitor(monitor, ref iid, out var itemPtr);
+    if (hr < 0)
+    {
+      var hrHex = $"0x{(hr & 0xFFFFFFFF):X8}";
+      var hrMessage = Marshal.GetExceptionForHR(hr)?.Message;
+      return Fail(PeekuErrorCode.Internal, "CreateForMonitor failed.", out error, details: new { monitor, hr, hrHex, hrMessage });
+    }
+
+    try
+    {
+      item = Marshal.GetObjectForIUnknown(itemPtr) as GraphicsCaptureItem;
+      if (item is null)
+      {
+        return Fail(PeekuErrorCode.Internal, "CreateForMonitor returned null.", out error, details: new { monitor });
+      }
+
+      return true;
+    }
+    finally
+    {
+      if (itemPtr != 0)
+      {
+        _ = Marshal.Release(itemPtr);
+      }
+    }
   }
 
-  private static IGraphicsCaptureItemInterop GetInterop()
+  private static nint GetInteropPtr()
   {
     var classId = default(nint);
     var factoryPtr = default(nint);
@@ -156,19 +235,14 @@ internal static class GraphicsCaptureItemFactory
       var hr = WindowsCreateString(className, className.Length, out classId);
       Marshal.ThrowExceptionForHR(hr);
 
-      var iid = typeof(IGraphicsCaptureItemInterop).GUID;
+      var iid = typeof(GraphicsCaptureItemInterop).GUID;
       hr = RoGetActivationFactory(classId, ref iid, out factoryPtr);
       Marshal.ThrowExceptionForHR(hr);
 
-      return (IGraphicsCaptureItemInterop)Marshal.GetObjectForIUnknown(factoryPtr);
+      return factoryPtr;
     }
     finally
     {
-      if (factoryPtr != 0)
-      {
-        _ = Marshal.Release(factoryPtr);
-      }
-
       if (classId != 0)
       {
         _ = WindowsDeleteString(classId);
@@ -205,13 +279,45 @@ internal static class GraphicsCaptureItemFactory
     return false;
   }
 
-  [ComImport]
+  // IID for Windows.Graphics.Capture.IGraphicsCaptureItem
+  // Source: C++/WinRT generated header (guid_v<IGraphicsCaptureItem>).
+  private static readonly Guid IGraphicsCaptureItemIid = new("79C3F95B-31F7-4EC2-A464-632EF5D30760");
+
   [Guid("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IGraphicsCaptureItemInterop
+  private readonly struct GraphicsCaptureItemInterop
   {
-    GraphicsCaptureItem CreateForWindow(nint window, [In] ref Guid iid);
-    GraphicsCaptureItem CreateForMonitor(nint monitor, [In] ref Guid iid);
+    private readonly nint _thisPtr;
+
+    internal GraphicsCaptureItemInterop(nint thisPtr)
+    {
+      _thisPtr = thisPtr;
+    }
+
+    internal int CreateForWindow(nint window, ref Guid iid, out nint result)
+    {
+      // Win32 interop factory: IUnknown vtable layout.
+      var del = GetVtableDelegate<CreateForWindowDelegate>(3);
+      return del(_thisPtr, window, ref iid, out result);
+    }
+
+    internal int CreateForMonitor(nint monitor, ref Guid iid, out nint result)
+    {
+      var del = GetVtableDelegate<CreateForMonitorDelegate>(4);
+      return del(_thisPtr, monitor, ref iid, out result);
+    }
+
+    private TDelegate GetVtableDelegate<TDelegate>(int methodIndex) where TDelegate : Delegate
+    {
+      var vtbl = Marshal.ReadIntPtr(_thisPtr);
+      var fnPtr = Marshal.ReadIntPtr(vtbl, methodIndex * IntPtr.Size);
+      return Marshal.GetDelegateForFunctionPointer<TDelegate>(fnPtr);
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int CreateForWindowDelegate(nint thisPtr, nint window, [In] ref Guid iid, out nint result);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int CreateForMonitorDelegate(nint thisPtr, nint monitor, [In] ref Guid iid, out nint result);
   }
 
   [DllImport("combase.dll")]

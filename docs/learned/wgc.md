@@ -15,5 +15,9 @@
 ## Repo implementation
 
 - `src/peeku.Core/Capture/WgcCapture.cs`: above pipeline.
-- `src/peeku.Core/Capture/CaptureImage.cs`: chooses `OutPath` (temp default), writes PNG, returns metadata; `IncludeBase64` not yet implemented.
-
+- `src/peeku.Core/Capture/CaptureImage.cs`: chooses `OutPath` (temp default), writes PNG, returns metadata; `IncludeBase64` supported.
+- `src/peeku.Core/Capture/GraphicsCaptureItemFactory.cs`:
+  - uses `IGraphicsCaptureItemInterop` vtable call (no RCW cast) + correct `IGraphicsCaptureItem` IID (`79C3F95B-31F7-4EC2-A464-632EF5D30760`).
+  - wraps returned WinRT ABI pointers with `WinRT.MarshalInspectable<T>.FromAbi(...)`.
+- `src/peeku.Core/Capture/WgcCapture.cs`:
+  - wraps `CreateDirect3D11DeviceFromDXGIDevice` result via `WinRT.MarshalInspectable<IDirect3DDevice>.FromAbi(...)` (avoid `System.__ComObject` CCW issues).
