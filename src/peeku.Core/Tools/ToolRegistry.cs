@@ -33,7 +33,7 @@ public static class ToolRegistry
       Create("peeku_click", "Click", "Click an element.", ClickInputSchemaJson, ClickOutputSchemaJson),
       Create("peeku_invoke", "Invoke", "Invoke an element.", InvokeInputSchemaJson, ClickOutputSchemaJson),
       Create("peeku_set_value", "Set Value", "Set element value.", SetValueInputSchemaJson, SetValueOutputSchemaJson),
-      Create("peeku_type", "Type", "Type text into an element.", TypeInputSchemaJson, MinimalActionOutputSchemaJson),
+      Create("peeku_type", "Type", "Type text into an element.", TypeInputSchemaJson, TypeOutputSchemaJson),
       Create("peeku_scroll", "Scroll", "Scroll on an element/target.", ScrollInputSchemaJson, MinimalActionOutputSchemaJson),
       Create("peeku_hotkey", "Hotkey", "Send a hotkey chord.", HotkeyInputSchemaJson, MinimalActionOutputSchemaJson),
       Create("peeku_observe", "Observe", "Observe UIA events (bounded).", ObserveInputSchemaJson, ObserveOutputSchemaJson),
@@ -102,9 +102,10 @@ public static class ToolRegistry
   private const string InvokeInputSchemaJson = """{"type":"object","properties":{"elementRef":{"type":"object"},"selector":{"type":"object"},"target":{"type":"object"}}}""";
 
   private const string SetValueInputSchemaJson = """{"type":"object","properties":{"elementRef":{"type":"object"},"selector":{"type":"object"},"target":{"type":"object"},"value":{"type":"string"}},"required":["value"]}""";
-  private const string SetValueOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"setOnElement":{"type":"object"}},"required":["ok","traceId"]}""";
+  private const string SetValueOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"methodUsed":{"type":"string"},"evidence":{"type":"object"}},"required":["ok","traceId"]}""";
 
   private const string TypeInputSchemaJson = """{"type":"object","properties":{"elementRef":{"type":"object"},"selector":{"type":"object"},"target":{"type":"object"},"text":{"type":"string"},"append":{"type":"boolean","default":true},"delayMs":{"type":"integer","default":0}},"required":["text"]}""";
+  private const string TypeOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"methodUsed":{"type":"string"},"evidence":{"type":"object"}},"required":["ok","traceId"]}""";
   private const string MinimalActionOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"}},"required":["ok","traceId"]}""";
 
   private const string ScrollInputSchemaJson = """{"type":"object","properties":{"elementRef":{"type":"object"},"selector":{"type":"object"},"target":{"type":"object"},"direction":{"type":"string","enum":["vertical","horizontal"],"default":"vertical"},"delta":{"type":"integer","description":"Wheel delta, e.g. 120/-120"}},"required":["delta"]}""";

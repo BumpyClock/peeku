@@ -33,6 +33,11 @@ peeku --daemon --stop
 
 - `--daemon` spawns background daemon and writes `%LOCALAPPDATA%\peeku\daemon.json`
 - When the marker exists, normal CLI commands connect to daemon by default
+- `watch` requires a running daemon (`peeku --daemon`)
+- Lifecycle:
+  - foreground server: `peeku --server`
+  - background daemon: `peeku --daemon`
+  - manual stop: `peeku --daemon --stop`
 
 ## Commands (implemented)
 
@@ -159,6 +164,10 @@ peeku set-value --selector "window[name~=\"Notepad\"]/edit" --value "hello"
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--value <text>` (required)
+- verification: if `ValuePattern` is supported, result is auto-verified against expected value
+  - mismatch => `ok=false`
+  - unsupported => `ok=true` + warning
+- includes `evidence` payload in result (operation/status/expected/actual/verification flags)
 
 ### `type`
 
@@ -171,6 +180,10 @@ peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello" --append f
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--append true|false` (default true)
+- verification: if `ValuePattern` is supported, final value is auto-verified
+  - mismatch => `ok=false`
+  - unsupported => `ok=true` + warning
+- includes `evidence` payload in result (operation/status/expected/actual/verification flags)
 
 ### `scroll`
 
@@ -210,6 +223,20 @@ peeku wait --selector "window[name~=\"Notepad\"]/edit" --timeout 00:00:10
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--live`: event-driven live UIA evaluation for selector (no snapshot)
 - `--timeout` is the global CLI timeout
+
+### `watch`
+
+```powershell
+peeku watch --selector "window[name~=\"Notepad\"]/edit"
+peeku watch --selector "window/button[name=\"OK\"]" --debounce-ms 100 --limit 20
+```
+
+- daemon-only command (requires `peeku --daemon`)
+- live selector evaluation stream (`--live` semantics built in)
+- emits JSONL `watch.update` lines when match set changes
+- `--debounce-ms <n>` default `100`
+- `--limit <n>` default `20`
+- runs until Ctrl+C
 
 ### `batch`
 

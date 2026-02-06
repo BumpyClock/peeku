@@ -192,19 +192,94 @@ public sealed partial class DaemonPeekuClient
           Error: resolved.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "Selection resolution failed."));
       }
 
-      if (!TrySetValue(resolved.Element, req.Value, out var setError))
+      var expectedValue = req.Value ?? "";
+      if (!TryIsValuePatternSupported(resolved.Element, out var valuePatternSupported, out var probeError))
       {
         return new ActionResult(
           Ok: false,
           Meta: scope.Meta(warning: resolved.Warning),
           MethodUsed: methodUsed,
-          Error: setError);
+          Error: probeError ?? PeekuErrors.Create(PeekuErrorCode.Internal, "ValuePattern probe failed."),
+          Evidence: CreateValueActionEvidence(
+            operation: "set-value",
+            valuePatternSupported: false,
+            expectedValue: expectedValue,
+            actualValue: null,
+            status: "probe_failed",
+            verificationPerformed: false,
+            verificationMatched: null));
+      }
+
+      if (!valuePatternSupported)
+      {
+        var verification = EvaluateValueVerification(
+          operation: "set-value",
+          valuePatternSupported: false,
+          expectedValue: expectedValue,
+          actualValue: null);
+
+        return new ActionResult(
+          Ok: true,
+          Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, verification.Warning)),
+          MethodUsed: methodUsed,
+          Evidence: verification.Evidence);
+      }
+
+      if (!TrySetValue(resolved.Element, expectedValue, out var setError))
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: resolved.Warning),
+          MethodUsed: methodUsed,
+          Error: setError,
+          Evidence: CreateValueActionEvidence(
+            operation: "set-value",
+            valuePatternSupported: true,
+            expectedValue: expectedValue,
+            actualValue: null,
+            status: "set_failed",
+            verificationPerformed: false,
+            verificationMatched: null));
+      }
+
+      if (!TryReadValue(resolved.Element, out var actualValue, out var readError))
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: resolved.Warning),
+          MethodUsed: methodUsed,
+          Error: readError,
+          Evidence: CreateValueActionEvidence(
+            operation: "set-value",
+            valuePatternSupported: true,
+            expectedValue: expectedValue,
+            actualValue: null,
+            status: "read_failed",
+            verificationPerformed: false,
+            verificationMatched: null));
+      }
+
+      var verificationResult = EvaluateValueVerification(
+        operation: "set-value",
+        valuePatternSupported: true,
+        expectedValue: expectedValue,
+        actualValue: actualValue);
+
+      if (!verificationResult.Ok)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: resolved.Warning),
+          MethodUsed: methodUsed,
+          Error: verificationResult.Error,
+          Evidence: verificationResult.Evidence);
       }
 
       return new ActionResult(
         Ok: true,
         Meta: scope.Meta(warning: resolved.Warning),
-        MethodUsed: methodUsed);
+        MethodUsed: methodUsed,
+        Evidence: verificationResult.Evidence);
     }
     catch (OperationCanceledException)
     {
@@ -283,52 +358,148 @@ public sealed partial class DaemonPeekuClient
       }
 
       var delayMs = req.DelayMs.GetValueOrDefault(0);
-
-      var baseText = "";
-      if (req.Append && TryGetValue(resolved.Element, out var current))
+      if (!TryIsValuePatternSupported(resolved.Element, out var valuePatternSupported, out var probeError))
       {
-        baseText = current ?? "";
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: resolved.Warning),
+          MethodUsed: methodUsed,
+          Error: probeError ?? PeekuErrors.Create(PeekuErrorCode.Internal, "ValuePattern probe failed."),
+          Evidence: CreateValueActionEvidence(
+            operation: "type",
+            valuePatternSupported: false,
+            expectedValue: req.Text,
+            actualValue: null,
+            status: "probe_failed",
+            verificationPerformed: false,
+            verificationMatched: null));
       }
 
-      if (delayMs <= 0)
+      if (!valuePatternSupported)
       {
-        if (!TrySetValue(resolved.Element, baseText + req.Text, out var setError))
-        {
-          return new ActionResult(
-            Ok: false,
-            Meta: scope.Meta(warning: resolved.Warning),
-            MethodUsed: methodUsed,
-            Error: setError);
-        }
+        var unsupported = EvaluateValueVerification(
+          operation: "type",
+          valuePatternSupported: false,
+          expectedValue: req.Text,
+          actualValue: null);
 
         return new ActionResult(
           Ok: true,
-          Meta: scope.Meta(warning: resolved.Warning),
-          MethodUsed: methodUsed);
+          Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, unsupported.Warning)),
+          MethodUsed: methodUsed,
+          Evidence: unsupported.Evidence);
       }
 
-      var typed = baseText;
-      for (var i = 0; i < req.Text.Length; i++)
+      var baseText = "";
+      if (req.Append)
       {
-        ct.ThrowIfCancellationRequested();
-        typed += req.Text[i];
-
-        if (!TrySetValue(resolved.Element, typed, out var setError))
+        if (!TryReadValue(resolved.Element, out var current, out var readError))
         {
           return new ActionResult(
             Ok: false,
             Meta: scope.Meta(warning: resolved.Warning),
             MethodUsed: methodUsed,
-            Error: setError);
+            Error: readError,
+            Evidence: CreateValueActionEvidence(
+              operation: "type",
+              valuePatternSupported: true,
+              expectedValue: req.Text,
+              actualValue: null,
+              status: "read_base_failed",
+              verificationPerformed: false,
+              verificationMatched: null));
         }
 
-        await Task.Delay(delayMs, ct).ConfigureAwait(false);
+        baseText = current ?? "";
+      }
+
+      var expectedValue = req.Append ? baseText + req.Text : req.Text;
+      if (delayMs <= 0)
+      {
+        if (!TrySetValue(resolved.Element, expectedValue, out var setError))
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: resolved.Warning),
+            MethodUsed: methodUsed,
+            Error: setError,
+            Evidence: CreateValueActionEvidence(
+              operation: "type",
+              valuePatternSupported: true,
+              expectedValue: expectedValue,
+              actualValue: null,
+              status: "set_failed",
+              verificationPerformed: false,
+              verificationMatched: null));
+        }
+      }
+      else
+      {
+        var typed = req.Append ? baseText : "";
+        for (var i = 0; i < req.Text.Length; i++)
+        {
+          ct.ThrowIfCancellationRequested();
+          typed += req.Text[i];
+
+          if (!TrySetValue(resolved.Element, typed, out var setError))
+          {
+            return new ActionResult(
+              Ok: false,
+              Meta: scope.Meta(warning: resolved.Warning),
+              MethodUsed: methodUsed,
+              Error: setError,
+              Evidence: CreateValueActionEvidence(
+                operation: "type",
+                valuePatternSupported: true,
+                expectedValue: expectedValue,
+                actualValue: typed,
+                status: "set_failed",
+                verificationPerformed: false,
+                verificationMatched: null));
+          }
+
+          await Task.Delay(delayMs, ct).ConfigureAwait(false);
+        }
+      }
+
+      if (!TryReadValue(resolved.Element, out var actualValue, out var finalReadError))
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: resolved.Warning),
+          MethodUsed: methodUsed,
+          Error: finalReadError,
+          Evidence: CreateValueActionEvidence(
+            operation: "type",
+            valuePatternSupported: true,
+            expectedValue: expectedValue,
+            actualValue: null,
+            status: "read_failed",
+            verificationPerformed: false,
+            verificationMatched: null));
+      }
+
+      var verificationResult = EvaluateValueVerification(
+        operation: "type",
+        valuePatternSupported: true,
+        expectedValue: expectedValue,
+        actualValue: actualValue);
+
+      if (!verificationResult.Ok)
+      {
+        return new ActionResult(
+          Ok: false,
+          Meta: scope.Meta(warning: resolved.Warning),
+          MethodUsed: methodUsed,
+          Error: verificationResult.Error,
+          Evidence: verificationResult.Evidence);
       }
 
       return new ActionResult(
         Ok: true,
         Meta: scope.Meta(warning: resolved.Warning),
-        MethodUsed: methodUsed);
+        MethodUsed: methodUsed,
+        Evidence: verificationResult.Evidence);
     }
     catch (OperationCanceledException)
     {

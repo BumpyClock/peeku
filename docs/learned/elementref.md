@@ -9,6 +9,7 @@
 
 - `snapshotId`: id for a single `uia snapshot` result; for debugging / correlation only.
 - `refId`: best-effort stable identifier for a UIA element. Format: `uia:<pid>:<hash>`.
+- `h:<id>`: daemon handle ref. Fast-path lookup in daemon session cache (TTL + LRU); intended for short-lived follow-up actions.
 
 Note:
 - Live selector mode (`--live`) does not produce a `snapshotId`.
@@ -29,12 +30,14 @@ Fallback (when RuntimeId missing):
 - Not stable across app restarts (processId changes).
 - Can change when the UI subtree is rebuilt (virtualization, tab reparenting, navigation).
 - Some elements have no `nativeWindowHandle` (HWND) even if visible; that’s normal.
+- `h:<id>` handles expire (TTL) and can be evicted (LRU); never treat them as durable identifiers.
 
 ## Recommended usage
 
 - Prefer `--selector` for anything long-lived / replayable.
 - Use `--ref` only within a short, single flow:
   - `uia snapshot` → pick element refId → `click/invoke/set-value/type/scroll`
+- For daemon-backed fast loops, `h:<id>` is preferred for immediate next action; fall back to selector when handle misses.
 
 ## What to do when `refId` stops resolving
 

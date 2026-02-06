@@ -46,6 +46,13 @@ public sealed class ToolRegistryTests
     }
   }
 
+  [Fact]
+  public void SetValue_And_Type_OutputSchemas_IncludeEvidence()
+  {
+    AssertOutputHasProperty("peeku_set_value", "evidence");
+    AssertOutputHasProperty("peeku_type", "evidence");
+  }
+
   private static void AssertSchemaLooksValid(string toolName, string schemaKind, JsonDocument schema)
   {
     Assert.Equal(JsonValueKind.Object, schema.RootElement.ValueKind);
@@ -88,5 +95,13 @@ public sealed class ToolRegistryTests
 
     Assert.Contains("ok", required);
     Assert.Contains("traceId", required);
+  }
+
+  private static void AssertOutputHasProperty(string toolName, string propertyName)
+  {
+    var tool = ToolRegistry.Get(toolName);
+    var root = tool.OutputSchema.RootElement;
+    Assert.True(root.TryGetProperty("properties", out var properties), $"{toolName}: output schema missing properties");
+    Assert.True(properties.TryGetProperty(propertyName, out _), $"{toolName}: output schema missing properties.{propertyName}");
   }
 }

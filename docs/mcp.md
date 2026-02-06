@@ -100,3 +100,5 @@ Notes:
 - `structuredContent`: always present; JSON object (tool result).
 - `content[0]`: `"type":"text"` JSON string (compat).
 - capture/see: if base64 included, `content` also includes `"type":"image"` with `{ data, mimeType }`.
+- action tools `peeku_set_value` and `peeku_type` include `evidence` in result payload:
+  - `operation`, `status`, `valuePatternSupported`, `expectedValue`, `actualValue`, `verificationPerformed`, `verificationMatched`

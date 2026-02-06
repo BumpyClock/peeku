@@ -11,6 +11,7 @@ internal static class CliFlowCommands
   {
     root.Add(CreateObserveCommand());
     root.Add(CreateWaitCommand());
+    root.Add(CreateWatchCommand());
     root.Add(CreateBatchCommand());
   }
 
@@ -223,6 +224,120 @@ internal static class CliFlowCommands
     return cmd;
   }
 
+  private static Command CreateWatchCommand()
+  {
+    var cmd = new Command("watch", "Stream live selector updates as JSONL (daemon only)");
+    var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
+
+    var selectorOpt = new Option<string>("--selector") { Description = "Selector expression" };
+    selectorOpt.Required = true;
+
+    var debounceOpt = new Option<int>("--debounce-ms") { Description = "Debounce between evaluations in ms" };
+    debounceOpt.DefaultValueFactory = _ => 100;
+    debounceOpt.Validators.Add(r =>
+    {
+      var v = r.GetValueOrDefault<int>();
+      if (v < 0)
+      {
+        r.AddError("Invalid --debounce-ms. Must be >= 0.");
+      }
+    });
+
+    var limitOpt = new Option<int>("--limit") { Description = "Max matches per evaluation" };
+    limitOpt.DefaultValueFactory = _ => 20;
+    limitOpt.Validators.Add(r =>
+    {
+      var v = r.GetValueOrDefault<int>();
+      if (v <= 0)
+      {
+        r.AddError("Invalid --limit. Must be >= 1.");
+      }
+    });
+
+    cmd.Add(selectorOpt);
+    cmd.Add(debounceOpt);
+    cmd.Add(limitOpt);
+
+    cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
+    {
+      var ctx = CliContextAccessor.Current;
+
+      if (!TryCreateDaemonClient(ctx, out var daemonClient, out var daemonError))
+      {
+        CliOutput.Write(new
+        {
+          ok = false,
+          meta = new { traceId = ctx.TraceId },
+          error = new { code = "InvalidOperation", message = daemonError },
+          traceId = ctx.TraceId,
+        }, ctx.Format);
+        return 1;
+      }
+
+      var selectorRaw = parse.GetValue(selectorOpt) ?? "";
+      var selector = new Selector(selectorRaw.Trim(), PreferCachedSnapshot: false);
+      var target = CliTargets.ParseOrDefaultFocused(parse, targetOpts);
+      var debounceMs = Math.Max(0, parse.GetValue(debounceOpt));
+      var debounce = TimeSpan.FromMilliseconds(debounceMs);
+      var limit = Math.Max(1, parse.GetValue(limitOpt));
+      var request = new FindRequest(selector, target, limit);
+
+      var streamOptions = new JsonSerializerOptions
+      {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false,
+      };
+
+      var lastSignature = "";
+      while (!ct.IsCancellationRequested)
+      {
+        FindResult res;
+        using (var callCts = CreateTimeoutCts(ctx.Timeout, ct))
+        {
+          res = await daemonClient.FindAsync(request, callCts.Token).ConfigureAwait(false);
+        }
+
+        if (!res.Ok)
+        {
+          Console.Out.WriteLine(JsonSerializer.Serialize(new
+          {
+            type = "watch.error",
+            timestamp = DateTimeOffset.UtcNow,
+            selector = request.Selector.Expr,
+            error = res.Error,
+            meta = res.Meta,
+          }, streamOptions));
+          return 1;
+        }
+
+        var signature = BuildMatchSignature(res.Matches);
+        if (!string.Equals(signature, lastSignature, StringComparison.Ordinal))
+        {
+          Console.Out.WriteLine(JsonSerializer.Serialize(new
+          {
+            type = "watch.update",
+            timestamp = DateTimeOffset.UtcNow,
+            selector = request.Selector.Expr,
+            count = res.Matches.Count,
+            matches = res.Matches,
+            meta = res.Meta,
+          }, streamOptions));
+          lastSignature = signature;
+        }
+
+        if (debounce > TimeSpan.Zero)
+        {
+          await Task.Delay(debounce, ct).ConfigureAwait(false);
+        }
+      }
+
+      return 0;
+    });
+
+    return cmd;
+  }
+
   private static ObserveEventSet ParseEvents(string? raw)
   {
     if (string.Equals(raw, "structure", StringComparison.OrdinalIgnoreCase)) return ObserveEventSet.Structure;
@@ -240,5 +355,63 @@ internal static class CliFlowCommands
     }
 
     return cts;
+  }
+
+  private static bool TryCreateDaemonClient(CliContext ctx, out IPeekuClient client, out string error)
+  {
+    client = null!;
+    error = "";
+
+    if (!DaemonMarker.TryLoad(out var marker))
+    {
+      error = "Watch requires daemon. Start with `peeku --daemon`.";
+      return false;
+    }
+
+    try
+    {
+      using var pingCts = CreateTimeoutCts(ctx.Timeout, CancellationToken.None);
+      var rpc = new DaemonJsonRpcClient(marker.PipeName, ctx.Timeout);
+      var ok = rpc.TryPingAsync(pingCts.Token).GetAwaiter().GetResult();
+      if (!ok)
+      {
+        error = "Daemon unreachable. Restart with `peeku --daemon`.";
+        return false;
+      }
+
+      client = new DaemonPeekuClient(rpc);
+      return true;
+    }
+    catch
+    {
+      error = "Daemon unreachable. Restart with `peeku --daemon`.";
+      return false;
+    }
+  }
+
+  private static string BuildMatchSignature(IReadOnlyList<FindMatch> matches)
+  {
+    if (matches is null || matches.Count == 0)
+    {
+      return "";
+    }
+
+    var parts = new string[matches.Count];
+    for (var i = 0; i < matches.Count; i++)
+    {
+      var m = matches[i];
+      parts[i] = string.Concat(
+        m.Element.RefId ?? "",
+        "|",
+        m.Rect.X.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture),
+        "|",
+        m.Rect.Y.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture),
+        "|",
+        m.Rect.Width.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture),
+        "|",
+        m.Rect.Height.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    return string.Join(";", parts);
   }
 }

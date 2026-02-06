@@ -10,3 +10,6 @@
 - 2026-02-05: CLI daemon auto-connect uses LocalAppData marker + JSON-RPC client calling `peeku.batch`.
 - 2026-02-05: Daemon sessions now use per-connection actor threads with serialized dispatch and tests.
 - 2026-02-05: Daemon handle cache emits `h:` refs; daemon actions resolve via handle cache fast-path.
+- 2026-02-05: Added daemon integration test over named pipe (`server.ping` + `peeku.batch` + `server.shutdown`) to catch protocol regressions end-to-end.
+- 2026-02-05: Added `peeku watch` daemon-only live-find stream; JSONL updates only on match-set diffs with debounce (default 100ms).
+- 2026-02-05: `set-value` and `type` now auto-verify final value; mismatch fails, ValuePattern unsupported returns success+warning with `evidence` payload.

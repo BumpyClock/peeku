@@ -83,4 +83,15 @@ public sealed class HandleIdCacheTests
     Assert.True(ok);
     Assert.Equal("bravo", value);
   }
+
+  [Fact]
+  public void IsHandleId_matches_prefix_case_insensitive_and_rejects_other_values()
+  {
+    var cache = new HandleIdCache<string>(capacity: 2, ttl: TimeSpan.FromMinutes(1), prefix: "h:");
+
+    Assert.True(cache.IsHandleId("h:abc123"));
+    Assert.True(cache.IsHandleId("H:abc123"));
+    Assert.False(cache.IsHandleId("uia:abc123"));
+    Assert.False(cache.IsHandleId(""));
+  }
 }

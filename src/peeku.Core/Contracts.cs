@@ -260,7 +260,8 @@ public record ActionResult(
   bool Ok,
   ResultMeta Meta,
   ActionMethod? MethodUsed = null,
-  PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+  PeekuError? Error = null,
+  JsonElement? Evidence = null) : ResultBase(Ok, Meta, Error);
 
 public enum ObserveEventSet
 {
