@@ -21,7 +21,7 @@ public sealed partial class UiaClient
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request is required."));
       }
 
-      var methodUsed = ActionMethodRouter.Route(req.Method, uiaSupported: true, inputSupported: false, out var routeError);
+      var methodUsed = ActionMethodRouter.Route(req.Method, uiaSupported: true, inputSupported: true, out var routeError);
       if (routeError is not null)
       {
         return new ActionResult(
@@ -41,13 +41,60 @@ public sealed partial class UiaClient
           Error: resolved.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "Selection resolution failed."));
       }
 
-      if (methodUsed == ActionMethod.Input)
+      if (methodUsed == ActionMethod.Input || req.Foreground)
       {
+        // Resolve the target window hwnd for focus capture.
+        var inputTarget = resolved.Selection.Target;
+        var targetWindow = Win32Windows.ResolveTargetWindow(inputTarget, ct);
+        var targetHwnd = targetWindow?.Hwnd ?? IntPtr.Zero;
+
+        // We need the element's rect — get it via a fresh UIA walk.
+        using var inputAutomation = new UIA3Automation();
+        var inputRoot = ResolveRoot(resolved.Selection.Target, inputAutomation, ct, out var inputRootWarning);
+        if (inputRoot is null)
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, inputRootWarning)),
+            MethodUsed: methodUsed,
+            Error: PeekuErrors.Create(PeekuErrorCode.WindowNotFound, "Target window not found."));
+        }
+
+        var inputElement = FindByRefId(inputRoot, resolved.Selection.Element.RefId, maxNodes: 20_000, ct);
+        if (inputElement is null)
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, inputRootWarning)),
+            MethodUsed: methodUsed,
+            Error: PeekuErrors.Create(
+              PeekuErrorCode.ElementNotFound,
+              "Element not found for click.",
+              new { refId = resolved.Selection.Element.RefId, snapshotId = resolved.Selection.SnapshotId }));
+        }
+
+        var uiaRect = inputElement.BoundingRectangle;
+        var rect = new Rect(uiaRect.X, uiaRect.Y, uiaRect.Width, uiaRect.Height);
+
+        var (clickOk, clickError, clickEvidence) = await SyntheticPointer.ClickAsync(rect, targetHwnd, ct).ConfigureAwait(false);
+        if (!clickOk)
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, inputRootWarning)),
+            MethodUsed: methodUsed,
+            Error: clickError);
+        }
+
+        var evidenceJson = clickEvidence is not null
+          ? System.Text.Json.JsonSerializer.SerializeToElement(clickEvidence)
+          : (System.Text.Json.JsonElement?)null;
+
         return new ActionResult(
-          Ok: false,
-          Meta: scope.Meta(warning: resolved.Warning),
+          Ok: true,
+          Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, inputRootWarning)),
           MethodUsed: methodUsed,
-          Error: PeekuErrors.Create(PeekuErrorCode.NotSupported, "Input click not supported yet."));
+          Evidence: evidenceJson);
       }
 
       using var automation = new UIA3Automation();
@@ -74,13 +121,13 @@ public sealed partial class UiaClient
             new { refId = resolved.Selection.Element.RefId, snapshotId = resolved.Selection.SnapshotId }));
       }
 
-      if (!TryClickViaUiaPatterns(element, out var clickError))
+      if (!TryClickViaUiaPatterns(element, out var uiaClickError))
       {
         return new ActionResult(
           Ok: false,
           Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, rootWarning)),
           MethodUsed: methodUsed,
-          Error: clickError);
+          Error: uiaClickError);
       }
 
       return new ActionResult(

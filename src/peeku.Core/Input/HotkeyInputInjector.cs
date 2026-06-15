@@ -177,6 +177,84 @@ internal static class HotkeyInputInjector
     return inputs;
   }
 
+  // ── Mouse INPUT builders ─────────────────────────────────────────────────────
+
+  /// <summary>
+  /// Absolute-position move event. <paramref name="ax"/>/<paramref name="ay"/> are in the
+  /// 0..65535 range produced by <see cref="Win32Screen.ToAbsolute"/>. Use together with
+  /// <see cref="MOUSEEVENTF_ABSOLUTE"/> | <see cref="MOUSEEVENTF_VIRTUALDESK"/>.
+  /// </summary>
+  internal static INPUT MouseMove(int ax, int ay)
+    => new()
+    {
+      type = INPUT_MOUSE,
+      U = new InputUnion
+      {
+        mi = new MOUSEINPUT
+        {
+          dx = ax,
+          dy = ay,
+          mouseData = 0,
+          dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+          time = 0,
+          dwExtraInfo = 0,
+        },
+      },
+    };
+
+  /// <summary>Builds a mouse button-down INPUT. Coordinates are ignored (cursor already moved).</summary>
+  internal static INPUT MouseButtonDown(uint downFlag)
+    => new()
+    {
+      type = INPUT_MOUSE,
+      U = new InputUnion
+      {
+        mi = new MOUSEINPUT
+        {
+          dx = 0,
+          dy = 0,
+          mouseData = 0,
+          dwFlags = downFlag,
+          time = 0,
+          dwExtraInfo = 0,
+        },
+      },
+    };
+
+  /// <summary>Builds a mouse button-up INPUT. Coordinates are ignored (cursor already moved).</summary>
+  internal static INPUT MouseButtonUp(uint upFlag)
+    => new()
+    {
+      type = INPUT_MOUSE,
+      U = new InputUnion
+      {
+        mi = new MOUSEINPUT
+        {
+          dx = 0,
+          dy = 0,
+          mouseData = 0,
+          dwFlags = upFlag,
+          time = 0,
+          dwExtraInfo = 0,
+        },
+      },
+    };
+
+  /// <summary>
+  /// Like <see cref="SendInputs"/> but returns the raw <c>SendInput</c> count instead of throwing.
+  /// Used by the mouse path so callers can distinguish partial delivery from total failure (UIPI).
+  /// The keyboard path keeps the throwing <see cref="SendInputs"/> unchanged.
+  /// </summary>
+  internal static uint SendInputsCounted(INPUT[] inputs)
+  {
+    if (inputs.Length == 0)
+    {
+      return 0;
+    }
+
+    return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+  }
+
   private static INPUT KeyDown(KeySpec key)
     => new()
     {
@@ -423,10 +501,20 @@ internal static class HotkeyInputInjector
       .Replace("-", "", StringComparison.Ordinal)
       .ToUpperInvariant();
 
+  private const uint INPUT_MOUSE    = 0;
   private const uint INPUT_KEYBOARD = 1;
 
   private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
-  private const uint KEYEVENTF_KEYUP = 0x0002;
+  private const uint KEYEVENTF_KEYUP       = 0x0002;
+
+  internal const uint MOUSEEVENTF_MOVE       = 0x0001;
+  internal const uint MOUSEEVENTF_LEFTDOWN   = 0x0002;
+  internal const uint MOUSEEVENTF_LEFTUP     = 0x0004;
+  internal const uint MOUSEEVENTF_RIGHTDOWN  = 0x0008;
+  internal const uint MOUSEEVENTF_RIGHTUP    = 0x0010;
+  internal const uint MOUSEEVENTF_WHEEL      = 0x0800;
+  internal const uint MOUSEEVENTF_ABSOLUTE   = 0x8000;
+  internal const uint MOUSEEVENTF_VIRTUALDESK = 0x4000;
 
   private const ushort VK_BACK = 0x08;
   private const ushort VK_TAB = 0x09;

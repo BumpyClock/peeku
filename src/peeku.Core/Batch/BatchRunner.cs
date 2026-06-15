@@ -229,7 +229,8 @@ internal static class BatchRunner
           }
 
           var method = BatchArgs.ReadActionMethod(args, "method") ?? ActionMethod.Auto;
-          var req = new ClickRequest(element, selector, target, method);
+          var foreground = BatchArgs.ReadBool(args, "foreground") ?? false;
+          var req = new ClickRequest(element, selector, target, method, foreground);
           var res = await client.ClickAsync(req, ct).ConfigureAwait(false);
           return (res.Ok, res, res.Error);
         }

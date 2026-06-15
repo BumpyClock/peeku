@@ -228,7 +228,8 @@ public record ClickRequest(
   ElementRef? Element = null,
   Selector? Selector = null,
   Target? Target = null,
-  ActionMethod Method = ActionMethod.Auto);
+  ActionMethod Method = ActionMethod.Auto,
+  bool Foreground = false);
 
 public record InvokeRequest(
   ElementRef? Element = null,

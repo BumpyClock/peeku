@@ -37,7 +37,11 @@ internal static class CliActionCommands
       }
     });
 
+    var foregroundOpt = new Option<bool>("--foreground") { Description = "Use SendInput synthetic mouse click (steals + restores foreground)" };
+    foregroundOpt.DefaultValueFactory = _ => false;
+
     cmd.Add(methodOpt);
+    cmd.Add(foregroundOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
@@ -56,12 +60,34 @@ internal static class CliActionCommands
 
       var method = ParseMethod(parse.GetValue(methodOpt));
 
+      // Precedence: --method input implies --foreground=true.
+      // Explicit --foreground=false + --method input is a contradiction → InvalidArgument.
+      // IsImplicit==false means the token was actually on the command line (not from DefaultValueFactory).
+      bool foreground;
+      var foregroundResult = parse.GetResult(foregroundOpt);
+      var foregroundWasExplicit = foregroundResult is not null && !foregroundResult.Implicit;
+      if (method == ActionMethod.Input)
+      {
+        if (foregroundWasExplicit && !parse.GetValue(foregroundOpt))
+        {
+          return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument,
+            "--method input implies --foreground; cannot combine with --foreground=false"));
+        }
+
+        foreground = true;
+      }
+      else
+      {
+        foreground = parse.GetValue(foregroundOpt);
+      }
+
       var client = CliPeekuClient.CreateDefault();
       var res = await client.ClickAsync(new ClickRequest(
         Element: elementRef,
         Selector: selector,
         Target: target,
-        Method: method), scope.Token).ConfigureAwait(false);
+        Method: method,
+        Foreground: foreground), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
       return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);

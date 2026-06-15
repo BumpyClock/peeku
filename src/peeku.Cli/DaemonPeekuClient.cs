@@ -216,6 +216,7 @@ internal sealed class DaemonPeekuClient : IPeekuClient
   {
     var args = BuildSelectionArgs(req.Element, req.Selector, req.Target);
     args["method"] = ActionMethodString(req.Method);
+    args["foreground"] = req.Foreground;
     return CallResultAsync(
       "peeku_click",
       args,
