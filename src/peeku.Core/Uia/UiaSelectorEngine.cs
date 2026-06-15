@@ -53,6 +53,8 @@ internal static class UiaSelectorEngine
 
     ct.ThrowIfCancellationRequested();
 
+    const int descendantVisitCap = 10_000;
+
     var current = new List<TNode>(capacity: 1) { root };
 
     for (var i = 0; i < segments.Count; i++)
@@ -62,32 +64,86 @@ internal static class UiaSelectorEngine
       var seg = segments[i];
       var next = new List<TNode>(capacity: current.Count * 4);
 
-      for (var j = 0; j < current.Count; j++)
+      if (seg.Descendant)
       {
-        ct.ThrowIfCancellationRequested();
+        // descendant axis: DFS over each frontier node's subtree
+        // Use IdentityComparer so records (UiaNode) de-dup by reference, not structural equality
+        var visited = new HashSet<TNode>(IdentityComparer<TNode>.Instance);
+        var visitCount = 0;
 
-        var node = current[j];
-
-        if (i == 0)
-        {
-          if (SegmentMatches(seg, node, name, controlType, automationId, className))
-          {
-            next.Add(node);
-          }
-        }
-
-        var nodeChildren = children(node);
-        for (var k = 0; k < nodeChildren.Count; k++)
+        for (var j = 0; j < current.Count; j++)
         {
           ct.ThrowIfCancellationRequested();
 
-          var cand = nodeChildren[k];
-          if (!SegmentMatches(seg, cand, name, controlType, automationId, className))
+          var stack = new Stack<TNode>();
+          var nodeChildren = children(current[j]);
+          for (var k = nodeChildren.Count - 1; k >= 0; k--)
           {
-            continue;
+            stack.Push(nodeChildren[k]);
           }
 
-          next.Add(cand);
+          while (stack.Count > 0)
+          {
+            ct.ThrowIfCancellationRequested();
+
+            if (visitCount >= descendantVisitCap)
+            {
+              goto doneDescendant;
+            }
+
+            var cand = stack.Pop();
+            if (!visited.Add(cand))
+            {
+              continue;
+            }
+
+            visitCount++;
+
+            if (SegmentMatches(seg, cand, name, controlType, automationId, className))
+            {
+              next.Add(cand);
+            }
+
+            var candChildren = children(cand);
+            for (var k = candChildren.Count - 1; k >= 0; k--)
+            {
+              stack.Push(candChildren[k]);
+            }
+          }
+        }
+
+        doneDescendant:;
+      }
+      else
+      {
+        // child axis (original behavior)
+        for (var j = 0; j < current.Count; j++)
+        {
+          ct.ThrowIfCancellationRequested();
+
+          var node = current[j];
+
+          if (i == 0)
+          {
+            if (SegmentMatches(seg, node, name, controlType, automationId, className))
+            {
+              next.Add(node);
+            }
+          }
+
+          var nodeChildren = children(node);
+          for (var k = 0; k < nodeChildren.Count; k++)
+          {
+            ct.ThrowIfCancellationRequested();
+
+            var cand = nodeChildren[k];
+            if (!SegmentMatches(seg, cand, name, controlType, automationId, className))
+            {
+              continue;
+            }
+
+            next.Add(cand);
+          }
         }
       }
 
@@ -177,6 +233,17 @@ internal static class UiaSelectorEngine
     return s.Trim().Replace(" ", "", StringComparison.Ordinal);
   }
 
+  // Reference-equality comparer for any T; needed because record types use structural equality.
+  private sealed class IdentityComparer<T> : IEqualityComparer<T>
+  {
+    internal static readonly IdentityComparer<T> Instance = new();
+
+    public bool Equals(T? x, T? y) => ReferenceEquals(x, y);
+
+    public int GetHashCode(T obj) =>
+      obj is null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
+  }
+
   internal enum SelectorOp
   {
     Equals = 0,
@@ -187,7 +254,8 @@ internal static class UiaSelectorEngine
 
   internal sealed record SelectorSegment(
     string? ControlType,
-    IReadOnlyList<SelectorFilter> Filters);
+    IReadOnlyList<SelectorFilter> Filters,
+    bool Descendant = false);
 
   private static class SelectorParser
   {
@@ -198,22 +266,105 @@ internal static class UiaSelectorEngine
         throw new ArgumentException("Selector expr required.", nameof(expr));
       }
 
-      var rawSegments = expr.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-      if (rawSegments.Length == 0)
+      // Hand-scan tokenizer. Splits on '/' while tracking bracket depth so
+      // that '/' inside a quoted filter value like [name="a/b"] is literal.
+      // Two consecutive out-of-bracket slashes mark the following segment as Descendant.
+      // Three or more consecutive slashes → error.
+      // Leading single '/' → trimmed (existing behaviour). Leading '//' → first segment is Descendant.
+
+      var tokens = new List<(string Raw, bool Descendant)>();
+      var buf = new System.Text.StringBuilder();
+      var depth = 0;
+      var pos = 0;
+      var pendingDescendant = false;
+
+      // strip single leading '/' (not '//')
+      if (expr.Length > 0 && expr[0] == '/' && (expr.Length < 2 || expr[1] != '/'))
+      {
+        pos = 1;
+      }
+
+      while (pos < expr.Length)
+      {
+        var ch = expr[pos];
+
+        if (ch == '[')
+        {
+          depth++;
+          buf.Append(ch);
+          pos++;
+          continue;
+        }
+
+        if (ch == ']')
+        {
+          if (depth > 0) depth--;
+          buf.Append(ch);
+          pos++;
+          continue;
+        }
+
+        if (ch == '/' && depth == 0)
+        {
+          // count run of slashes
+          var slashStart = pos;
+          while (pos < expr.Length && expr[pos] == '/') pos++;
+          var slashCount = pos - slashStart;
+
+          if (slashCount > 2)
+          {
+            throw new ArgumentException("Invalid selector: '///' is not a valid axis.", nameof(expr));
+          }
+
+          var raw = buf.ToString().Trim();
+          buf.Clear();
+
+          if (raw.Length > 0)
+          {
+            tokens.Add((raw, pendingDescendant));
+          }
+          else if (pendingDescendant)
+          {
+            // e.g. "a///b" would hit slashCount>2 above; "a//" mid at end → trailing error below
+            throw new ArgumentException("Descendant axis requires a following segment.", nameof(expr));
+          }
+
+          // the NEXT token inherits descendant flag from this separator
+          pendingDescendant = slashCount == 2;
+          continue;
+        }
+
+        buf.Append(ch);
+        pos++;
+      }
+
+      // flush last token
+      var lastRaw = buf.ToString().Trim();
+      if (lastRaw.Length > 0)
+      {
+        tokens.Add((lastRaw, pendingDescendant));
+      }
+      else if (pendingDescendant)
+      {
+        // trailing '//' with no following segment
+        throw new ArgumentException("Descendant axis requires a following segment.", nameof(expr));
+      }
+
+      if (tokens.Count == 0)
       {
         throw new ArgumentException("Selector expr required.", nameof(expr));
       }
 
-      var segments = new List<SelectorSegment>(capacity: rawSegments.Length);
-      foreach (var raw in rawSegments)
+      var segments = new List<SelectorSegment>(capacity: tokens.Count);
+      foreach (var (raw, descendant) in tokens)
       {
-        segments.Add(ParseSegment(raw));
+        segments.Add(ParseSegment(raw, descendant));
       }
 
       return segments;
     }
 
-    private static SelectorSegment ParseSegment(string raw)
+    private static SelectorSegment ParseSegment(string raw, bool descendant = false)
     {
       var typePart = raw;
       var filters = new List<SelectorFilter>();
@@ -243,7 +394,7 @@ internal static class UiaSelectorEngine
       }
 
       var ct = string.IsNullOrWhiteSpace(typePart) ? "*" : Normalize(typePart);
-      return new SelectorSegment(ct, filters);
+      return new SelectorSegment(ct, filters, descendant);
     }
 
     private static SelectorFilter ParseFilter(string inner)
