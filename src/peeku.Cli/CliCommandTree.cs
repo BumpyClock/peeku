@@ -10,9 +10,11 @@ internal static class CliCommandTree
     root.Add(CreateDoctorCommand());
     root.Add(CreateWindowsCommand());
     root.Add(CreateCaptureCommand());
+    root.Add(CliDaemonCommands.CreateDaemonCommand());
     CliUiaCommands.AddAll(root);
     CliActionCommands.AddAll(root);
     CliFlowCommands.AddAll(root);
+    CliDiffCommands.AddAll(root);
   }
 
   private static Command CreateDoctorCommand()
@@ -41,6 +43,7 @@ internal static class CliCommandTree
     var windows = new Command("windows", "Window discovery");
     windows.Add(CreateWindowsListCommand());
     windows.Add(CreateWindowsFocusedCommand());
+    windows.Add(CreateWindowsFocusCommand());
     return windows;
   }
 
@@ -128,6 +131,35 @@ internal static class CliCommandTree
 
       var client = CliPeekuClient.CreateDefault();
       var res = await client.WindowsFocusedAsync(scope.Token).ConfigureAwait(false);
+      CliOutput.Write(res, ctx.Format);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
+    });
+
+    return cmd;
+  }
+
+  private static Command CreateWindowsFocusCommand()
+  {
+    var cmd = new Command("focus", "Bring a window to the foreground");
+    var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
+
+    cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
+    {
+      var ctx = CliContextAccessor.Current;
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
+
+      if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, global::peeku.PeekuErrors.Create(global::peeku.PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
+
+      if (target is global::peeku.Target.Desktop or global::peeku.Target.Screen)
+      {
+        return CliErrors.Write(ctx, global::peeku.PeekuErrors.Create(global::peeku.PeekuErrorCode.InvalidArgument, "windows focus requires a window target (--focused|--hwnd|--app|query), not desktop/screen."));
+      }
+
+      var client = CliPeekuClient.CreateDefault();
+      var res = await client.WindowFocusAsync(new global::peeku.WindowFocusRequest(target), scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
       return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
