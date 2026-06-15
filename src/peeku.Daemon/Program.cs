@@ -16,6 +16,10 @@ public sealed class Program
 {
   public static async Task<int> Main(string[] args)
   {
+    // P1b-S0: set DPI awareness before DaemonSession constructs UIA3Automation (process-wide, must
+    // precede the first COM/UIA init on the actor thread).
+    Win32Screen.EnsureProcessDpiAware();
+
     var pipeName = ResolvePipeName(args);
     var shutdown = new DaemonShutdown();
     using var cts = new CancellationTokenSource();

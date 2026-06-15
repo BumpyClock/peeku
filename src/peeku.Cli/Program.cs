@@ -11,6 +11,10 @@ internal static class Program
 {
   private static async Task<int> Main(string[] args)
   {
+    // P1b-S0: per-monitor DPI awareness MUST be set before any UIA/FlaUI/capture/window touch
+    // (process-wide, immutable once a thread inits COM/UIA). Makes coordinates physical pixels.
+    Win32Screen.EnsureProcessDpiAware();
+
     if (args.Length == 0)
     {
       args = ["--help"];
