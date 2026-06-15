@@ -162,6 +162,19 @@ peeku element get --selector "window[name~=\"Notepad\"]/edit" --includePropertie
 - element fields in result: same `actions` + `state` as `uia snapshot` when `--includeProperties all`
 - error hints: when selector/element not found, `error.details` includes `candidates` array (up to 3 ranked "did you mean" elements) with shape `{ controlType, name, automationId, rect }`
 
+### `element at-point --x <int> --y <int>` (hit-test)
+
+```powershell
+peeku element at-point --x 640 --y 480
+peeku element at-point --x 100 --y 200 --includeProperties basic
+```
+
+- `--x <int>` (required): physical screen X coordinate
+- `--y <int>` (required): physical screen Y coordinate
+- `--includeProperties basic|all` (default all)
+- hit-test at physical pixel coordinates and resolve UIA element
+- result includes `element` (with same `actions`/`state` as `element get` when `--includeProperties all`) and `ancestors` array (root-first ancestry chain)
+
 ### `click`
 
 ```powershell
@@ -289,6 +302,22 @@ peeku batch --in ops.json --stop-on-error true
   { "tool": "peeku_click", "args": { "selector": { "expr": "window/edit" } } }
 ]
 ```
+
+### `diff`
+
+```powershell
+peeku diff --beforeFocused --focused
+peeku diff --beforeApp notepad --app calc
+peeku diff --beforeFocused --focused --depth 3 --maxNodes 1000
+```
+
+- **before-target flags** (parallel to after-target): `--beforeFocused` (default), `--beforeDesktop`, `--beforeScreenIndex <n>`, `--beforeHwnd <hex>`, `--beforeTitleContains <text>`, `--beforeProcessName <name>`, `--beforeProcessId <id>`, `--beforeApp <name>` (alias for `--beforeProcessName`), `--beforePid <id>` (alias for `--beforeProcessId`)
+- **after-target flags** (standard): `--focused` (default), `--desktop`, `--screenIndex`, `--hwnd`, `--titleContains`, `--processName`, `--processId`, `--app`, `--pid`
+- `--depth <n>` (default 6): applied to both snapshots
+- `--maxNodes <n>` (default 5000): applied to both snapshots
+- `--includeProperties basic|all` (default basic): applied to both snapshots
+- output: `snapshotIdBefore`, `snapshotIdAfter`, `delta` object with `added` (array of `{ subtree, ancestors }`), `removed` (array of `{ subtree, ancestors }`), and `truncated` flag
+- caveat: when `maxNodes` limit is hit, real subtrees may appear removed; use identical `--depth` and `--maxNodes` on both sides for correct diff
 
 ## Error envelope
 

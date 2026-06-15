@@ -355,6 +355,8 @@ public record DiffResult(
   UiaTreeDelta? Delta = null,
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
 
+// Target is reserved and currently unused: FromPoint resolves by absolute screen pixel,
+// so there is no subtree to scope. Kept for schema symmetry / forward-compat.
 public record ElementAtPointRequest(
   int X,
   int Y,
