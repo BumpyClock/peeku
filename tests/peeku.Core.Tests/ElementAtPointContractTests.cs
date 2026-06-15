@@ -226,6 +226,10 @@ file sealed class ThrowingFakeClientForHitTest : IPeekuClient
     => Throw<WindowActionResult>();
   public Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default)
     => Throw<WindowActionResult>();
+  public Task<AppLaunchResult> AppLaunchAsync(AppLaunchRequest req, CancellationToken ct = default)
+    => Throw<AppLaunchResult>();
+  public Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default)
+    => Throw<AppQuitResult>();
 
   private static Task<T> Throw<T>()
     => Task.FromException<T>(new NotImplementedException());

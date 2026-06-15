@@ -50,6 +50,8 @@ public static class ToolRegistry
       Create("peeku_window_maximize", "Window Maximize", "Maximize a window.", WindowStateInputSchemaJson, WindowActionOutputSchemaJson),
       Create("peeku_window_restore", "Window Restore", "Restore a minimized or maximized window.", WindowStateInputSchemaJson, WindowActionOutputSchemaJson),
       Create("peeku_window_close", "Window Close", "Close a window gracefully (WM_CLOSE) and report whether it closed.", WindowCloseInputSchemaJson, WindowActionOutputSchemaJson),
+      Create("peeku_app_launch", "App Launch", "Launch an application by path or AUMID.", AppLaunchInputSchemaJson, AppLaunchOutputSchemaJson),
+      Create("peeku_app_quit", "App Quit", "Quit an application gracefully (WM_CLOSE loop) then force-kill on timeout.", AppQuitInputSchemaJson, AppQuitOutputSchemaJson),
     ];
   }
 
@@ -149,5 +151,12 @@ public static class ToolRegistry
   private const string WindowStateInputSchemaJson = """{"type":"object","properties":{"target":""" + WindowTargetSchema + """},"required":["target"]}""";
   private const string WindowCloseInputSchemaJson = """{"type":"object","properties":{"target":""" + WindowTargetSchema + ""","waitMs":{"type":"integer","default":2000,"description":"Max ms to wait for window to close; poll IsWindow until gone or elapsed."}},"required":["target"]}""";
   private const string WindowActionOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"evidence":{"type":"object","description":"For close: {closed:bool}; others empty."}},"required":["ok","traceId"]}""";
+
+  // ── App lifecycle (S4) ────────────────────────────────────────────────────
+  private const string AppLaunchInputSchemaJson = """{"type":"object","properties":{"target":{"type":"string","description":"File path, URI, or AUMID (e.g. Microsoft.WindowsCalculator_8wekyb3d8bbwe!App)"},"args":{"type":"string","description":"Optional command-line arguments"},"waitUntilReady":{"type":"boolean","default":false,"description":"Wait for input-idle and a top-level window before returning"},"waitMs":{"type":"integer","default":5000,"description":"Max ms to wait when waitUntilReady=true"},"noFocus":{"type":"boolean","default":false,"description":"Skip post-launch BringToForeground activation"}},"required":["target"]}""";
+  private const string AppLaunchOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"processId":{"type":"integer"},"window":{"type":"object","description":"First top-level window of the launched process, if found"}},"required":["ok","traceId"]}""";
+
+  private const string AppQuitInputSchemaJson = """{"type":"object","properties":{"processId":{"type":"integer","description":"PID to quit"},"processName":{"type":"string","description":"Process name to quit (used when processId is absent)"},"force":{"type":"boolean","default":false,"description":"Kill immediately without WM_CLOSE grace period"},"all":{"type":"boolean","default":false,"description":"Quit all processes matching processName"},"except":{"type":"array","items":{"type":"string"},"description":"Process names to skip when using --all"},"waitMs":{"type":"integer","default":3000,"description":"Grace period before force-kill (ms)"}},"required":[]}""";
+  private const string AppQuitOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"closed":{"type":"integer","description":"Processes closed gracefully"},"killed":{"type":"integer","description":"Processes force-killed"}},"required":["ok","traceId"]}""";
 }
 

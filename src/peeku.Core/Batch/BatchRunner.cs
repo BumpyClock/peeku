@@ -520,6 +520,35 @@ internal static class BatchRunner
           return (res.Ok, res, res.Error);
         }
 
+        case "peeku_app_launch":
+        {
+          var launchTarget = BatchArgs.ReadString(args, "target") ?? "";
+          if (string.IsNullOrWhiteSpace(launchTarget))
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "target is required."));
+          var req = new AppLaunchRequest(
+            Target: launchTarget,
+            Args: BatchArgs.ReadString(args, "args"),
+            WaitUntilReady: BatchArgs.ReadBool(args, "waitUntilReady") ?? false,
+            WaitMs: BatchArgs.ReadInt(args, "waitMs") ?? 5000,
+            NoFocus: BatchArgs.ReadBool(args, "noFocus") ?? false);
+          var res = await client.AppLaunchAsync(req, ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_app_quit":
+        {
+          var except = BatchArgs.ReadStringArray(args, "except");
+          var req = new AppQuitRequest(
+            ProcessId: BatchArgs.ReadInt(args, "processId"),
+            ProcessName: BatchArgs.ReadString(args, "processName"),
+            Force: BatchArgs.ReadBool(args, "force") ?? false,
+            All: BatchArgs.ReadBool(args, "all") ?? false,
+            Except: except,
+            WaitMs: BatchArgs.ReadInt(args, "waitMs") ?? 3000);
+          var res = await client.AppQuitAsync(req, ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
         default:
           return (false, null, PeekuErrors.Create(PeekuErrorCode.NotSupported, "Unknown tool.", new { tool }));
       }

@@ -41,6 +41,10 @@ public interface IPeekuClient
   Task<WindowActionResult> WindowMaximizeAsync(WindowStateRequest req, CancellationToken ct = default);
   Task<WindowActionResult> WindowRestoreAsync(WindowStateRequest req, CancellationToken ct = default);
   Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default);
+
+  // App lifecycle (S4)
+  Task<AppLaunchResult> AppLaunchAsync(AppLaunchRequest req, CancellationToken ct = default);
+  Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default);
 }
 
 public abstract record Target
@@ -383,6 +387,37 @@ public record ElementAtPointResult(
   ResultMeta Meta,
   UiaElement Element,
   IReadOnlyList<UiaElement> Ancestors,
+  PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+
+// ── App lifecycle (S4) ───────────────────────────────────────────────────────
+
+public record AppLaunchRequest(
+  string Target,
+  string? Args = null,
+  bool WaitUntilReady = false,
+  int WaitMs = 5000,
+  bool NoFocus = false);
+
+public record AppLaunchResult(
+  bool Ok,
+  ResultMeta Meta,
+  int? ProcessId = null,
+  WindowInfo? Window = null,
+  PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+
+public record AppQuitRequest(
+  int? ProcessId = null,
+  string? ProcessName = null,
+  bool Force = false,
+  bool All = false,
+  IReadOnlyList<string>? Except = null,
+  int WaitMs = 3000);
+
+public record AppQuitResult(
+  bool Ok,
+  ResultMeta Meta,
+  int Closed = 0,
+  int Killed = 0,
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
 
 // ── Window management (S3) ────────────────────────────────────────────────────

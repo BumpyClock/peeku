@@ -464,6 +464,49 @@ internal sealed class DaemonPeekuClient : IPeekuClient
     return CallResultAsync("peeku_window_close", args, (meta, error) => new WindowActionResult(false, meta, error), ct);
   }
 
+  public Task<AppLaunchResult> AppLaunchAsync(AppLaunchRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["target"] = req.Target,
+      ["waitUntilReady"] = req.WaitUntilReady,
+      ["waitMs"] = req.WaitMs,
+      ["noFocus"] = req.NoFocus,
+    };
+    if (req.Args is not null)
+    {
+      args["args"] = req.Args;
+    }
+
+    return CallResultAsync("peeku_app_launch", args, (meta, error) => new AppLaunchResult(false, meta, Error: error), ct);
+  }
+
+  public Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["force"] = req.Force,
+      ["all"] = req.All,
+      ["waitMs"] = req.WaitMs,
+    };
+    if (req.ProcessId is not null)
+    {
+      args["processId"] = req.ProcessId.Value;
+    }
+
+    if (req.ProcessName is not null)
+    {
+      args["processName"] = req.ProcessName;
+    }
+
+    if (req.Except is not null && req.Except.Count > 0)
+    {
+      args["except"] = req.Except;
+    }
+
+    return CallResultAsync("peeku_app_quit", args, (meta, error) => new AppQuitResult(false, meta, Error: error), ct);
+  }
+
   private async Task<T> CallResultAsync<T>(
     string tool,
     object args,

@@ -209,6 +209,10 @@ public sealed class ToolParityTests
     "peeku_window_restore"    => """{"target":"focused_window"}""",
     "peeku_window_close"      => """{"target":"focused_window"}""",
 
+    // App lifecycle (S4).
+    "peeku_app_launch"        => """{"target":"notepad.exe"}""",
+    "peeku_app_quit"          => """{"processId":1}""",
+
     _ => "{}",
   };
 
@@ -316,6 +320,11 @@ file sealed class ThrowingFakeClient : IPeekuClient
     => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowRestoreAsync)));
   public Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default)
     => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowCloseAsync)));
+
+  public Task<AppLaunchResult> AppLaunchAsync(AppLaunchRequest req, CancellationToken ct = default)
+    => Task.FromException<AppLaunchResult>(new NotImplementedException(nameof(AppLaunchAsync)));
+  public Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default)
+    => Task.FromException<AppQuitResult>(new NotImplementedException(nameof(AppQuitAsync)));
 
 #pragma warning disable CS1998 // async method lacks await — intentional (throws before any yield)
   private static async IAsyncEnumerable<ObservationEvent> ThrowAsyncEnumerable(

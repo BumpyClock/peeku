@@ -94,6 +94,11 @@ internal sealed class WarningPeekuClient : IPeekuClient
   public async Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default)
     => WithWarning(await _inner.WindowCloseAsync(req, ct).ConfigureAwait(false));
 
+  public async Task<AppLaunchResult> AppLaunchAsync(AppLaunchRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.AppLaunchAsync(req, ct).ConfigureAwait(false));
+  public async Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.AppQuitAsync(req, ct).ConfigureAwait(false));
+
   private T WithWarning<T>(T result) where T : ResultBase
   {
     var existing = result.Meta.Warning ?? "";

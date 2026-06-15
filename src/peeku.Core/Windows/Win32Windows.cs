@@ -448,4 +448,44 @@ internal static class Win32Windows
 
   /// <summary>Returns whether <paramref name="hwnd"/> is maximized.</summary>
   internal static bool IsWindowMaximized(IntPtr hwnd) => IsZoomed(hwnd);
+
+  // ── App lifecycle (S4) ──────────────────────────────────────────────────────
+
+  /// <summary>
+  /// Lists top-level windows for the given process id. Limit is fixed at 256;
+  /// designed for pid-scoped queries (launch readiness, quit WM_CLOSE loop).
+  /// </summary>
+  internal static IReadOnlyList<WindowInfo> ListWindowsForProcess(int pid)
+  {
+    var req = new WindowsListRequest(Limit: 256);
+    return ListWindows(req, processId: pid, ct: CancellationToken.None);
+  }
+
+  /// <summary>
+  /// Posts WM_CLOSE to the window identified by <paramref name="hwndHex"/>. Returns false if
+  /// the handle could not be parsed or the PostMessage call fails.
+  /// </summary>
+  internal static bool PostCloseMessage(string hwndHex)
+  {
+    if (!TryParseHwndHex(hwndHex, out var hwnd))
+    {
+      return false;
+    }
+
+    return PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+  }
+
+  /// <summary>
+  /// String-hwnd overload of <see cref="BringToForegroundReliable(IntPtr)"/>.
+  /// Returns false when the hwnd string cannot be parsed.
+  /// </summary>
+  internal static bool BringToForegroundReliable(string hwndHex)
+  {
+    if (!TryParseHwndHex(hwndHex, out var hwnd))
+    {
+      return false;
+    }
+
+    return BringToForegroundReliable(hwnd);
+  }
 }
