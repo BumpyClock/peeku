@@ -417,7 +417,7 @@ internal static class ActionSelectionResolver
   }
 
   /// <summary>
-  /// Bounded BFS over the live UIA tree, collecting up to <paramref name="maxCollect"/> elements
+  /// Bounded DFS over the live UIA tree, collecting up to <paramref name="maxCollect"/> elements
   /// (with name or automationId) for candidate-hint ranking. Visits at most
   /// <paramref name="maxVisited"/> nodes to stay cheap on large trees.
   /// </summary>

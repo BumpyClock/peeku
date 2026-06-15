@@ -114,8 +114,8 @@ internal static class CandidateHints
   {
     if (intentNorm is null)
     {
-      // No intent: named > unnamed, no bonus.
-      return string.IsNullOrWhiteSpace(el.Name) ? 0 : 1;
+      // No intent: named (by name OR automationId) > nameless, no bonus.
+      return (string.IsNullOrWhiteSpace(el.Name) && string.IsNullOrWhiteSpace(el.AutomationId)) ? 0 : 1;
     }
 
     var nameMatch = !string.IsNullOrWhiteSpace(el.Name) &&
@@ -128,7 +128,7 @@ internal static class CandidateHints
       return 3;
     }
 
-    if (!string.IsNullOrWhiteSpace(el.Name))
+    if (!string.IsNullOrWhiteSpace(el.Name) || !string.IsNullOrWhiteSpace(el.AutomationId))
     {
       return 1;
     }
