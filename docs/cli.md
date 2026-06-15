@@ -35,31 +35,25 @@ Use before/after subcommands.
 - `--log-file <path>` (optional)
 - `--trace-id <id>` (optional; else generated)
 - `--profile <name>` (reserved; no-op for now)
+- `--server` (run daemon server in foreground)
+- `--daemon` (spawn/stop daemon; see below)
+- `--stop` (stop daemon; requires `--daemon`)
 
 ## Daemon (fast mode)
 
 ```powershell
-peeku daemon start
-peeku daemon stop
-peeku daemon status
-peeku daemon serve
-peeku daemon          # same as status
+peeku --server
+peeku --daemon
+peeku --daemon --stop
 ```
 
-- `daemon start` spawns background daemon and writes `%LOCALAPPDATA%\peeku\daemon.json` (idempotent; does nothing if already running)
+- `--daemon` spawns background daemon and writes `%LOCALAPPDATA%\peeku\daemon.json`
 - When the marker exists, normal CLI commands connect to daemon by default
-- `watch` requires a running daemon (`peeku daemon start`)
+- `watch` requires a running daemon (`peeku --daemon`)
 - Lifecycle:
-  - foreground server: `peeku daemon serve` (blocks until Ctrl-C)
-  - background daemon: `peeku daemon start`
-  - manual stop: `peeku daemon stop`
-- `daemon status` emits a machine-readable JSON envelope (always exits 0):
-  ```json
-  { "running": true, "pid": 12345, "pipeName": "peeku.user.v1",
-    "startedAt": "2026-06-15T10:00:00Z",
-    "protocolVersion": "1", "buildVersion": "0.1.0+abc" }
-  ```
-  `running: false` when no marker exists or ping fails; remaining fields omitted when not running.
+  - foreground server: `peeku --server`
+  - background daemon: `peeku --daemon`
+  - manual stop: `peeku --daemon --stop`
 
 ## Commands (implemented)
 
@@ -118,10 +112,6 @@ peeku uia snapshot --hwnd 0x000000000001047C --includeProperties all
 - `--depth <n>` (default 6)
 - `--maxNodes <n>` (default 5000)
 - `--includeProperties basic|all` (default basic)
-- element fields:
-  - `actions`: array of capability tokens (e.g., `invoke`, `toggle`, `value`, `expand`, `pick`, `scroll`, `read`, `grid`, `range`, plus always-present `focus`, `click`, `hover`); populated only when `--includeProperties all`
-  - `state`: object of current pattern state (keys like `toggleState`, `expandState`, `isSelected`, `rangeValue`, `value`); omitted if no state is present; populated only when `--includeProperties all`
-  - basic snapshots omit both fields (null) for lean output
 - tab strips: if `controlType: Tab` has no native UIA name, `name` may be populated as `tabs: ...` from descendant `TabItem` labels (`*` = selected)
 
 ### `see`
@@ -129,12 +119,10 @@ peeku uia snapshot --hwnd 0x000000000001047C --includeProperties all
 ```powershell
 peeku see --depth 2 --maxNodes 500
 peeku see --includeBase64
-peeku see --includeProperties all
 ```
 
 - same target + depth/maxNodes/includeProperties as `uia snapshot`
 - `--includeBase64`: include base64 PNG in response
-- element fields: same `actions` + `state` as `uia snapshot` when `--includeProperties all`
 
 ### `find`
 
@@ -147,7 +135,7 @@ peeku find --selector "window[name~=\"Notepad\"]/edit" --limit 5
 - `--limit <n>`: max matches (default 20)
 - target flags optional; if omitted, defaults to focused window
 
-### `element get` (inspect)
+### `element get`
 
 ```powershell
 peeku element get --ref uia:123:abc --snapshotId <id>
@@ -159,21 +147,6 @@ peeku element get --selector "window[name~=\"Notepad\"]/edit" --includePropertie
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - `--includeProperties basic|all` (default all)
 - target flags optional; if omitted, defaults to focused window
-- element fields in result: same `actions` + `state` as `uia snapshot` when `--includeProperties all`
-- error hints: when selector/element not found, `error.details` includes `candidates` array (up to 3 ranked "did you mean" elements) with shape `{ controlType, name, automationId, rect }`
-
-### `element at-point --x <int> --y <int>` (hit-test)
-
-```powershell
-peeku element at-point --x 640 --y 480
-peeku element at-point --x 100 --y 200 --includeProperties basic
-```
-
-- `--x <int>` (required): physical screen X coordinate
-- `--y <int>` (required): physical screen Y coordinate
-- `--includeProperties basic|all` (default all)
-- hit-test at physical pixel coordinates and resolve UIA element
-- result includes `element` (with same `actions`/`state` as `element get` when `--includeProperties all`) and `ancestors` array (root-first ancestry chain)
 
 ### `click`
 
@@ -186,7 +159,6 @@ peeku click --ref uia:123:abc --method uia
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--method auto|uia|input` (default auto)
-- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `invoke`
 
@@ -197,7 +169,6 @@ peeku invoke --selector "window[name~=\"Notepad\"]/menuitem[name=\"File\"]"
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
-- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `set-value`
 
@@ -213,7 +184,6 @@ peeku set-value --selector "window[name~=\"Notepad\"]/edit" --value "hello"
   - mismatch => `ok=false`
   - unsupported => `ok=true` + warning
 - includes `evidence` payload in result (operation/status/expected/actual/verification flags)
-- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `type`
 
@@ -230,7 +200,6 @@ peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello" --append f
   - mismatch => `ok=false`
   - unsupported => `ok=true` + warning
 - includes `evidence` payload in result (operation/status/expected/actual/verification flags)
-- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `scroll`
 
@@ -244,7 +213,6 @@ peeku scroll --selector "window[name~=\"Notepad\"]/edit" --lines -3 --direction 
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - exactly one of `--delta` or `--lines` is required
 - `--direction vertical|horizontal` (default vertical)
-- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `hotkey`
 
@@ -279,7 +247,7 @@ peeku watch --selector "window[name~=\"Notepad\"]/edit"
 peeku watch --selector "window/button[name=\"OK\"]" --debounce-ms 100 --limit 20
 ```
 
-- daemon-only command (requires `peeku daemon start`)
+- daemon-only command (requires `peeku --daemon`)
 - live selector evaluation stream (`--live` semantics built in)
 - emits JSONL `watch.update` lines when match set changes
 - `--debounce-ms <n>` default `100`
@@ -302,45 +270,6 @@ peeku batch --in ops.json --stop-on-error true
   { "tool": "peeku_click", "args": { "selector": { "expr": "window/edit" } } }
 ]
 ```
-
-### `diff`
-
-```powershell
-peeku diff --beforeFocused --focused
-peeku diff --beforeApp notepad --app calc
-peeku diff --beforeFocused --focused --depth 3 --maxNodes 1000
-```
-
-- **before-target flags** (parallel to after-target): `--beforeFocused` (default), `--beforeDesktop`, `--beforeScreenIndex <n>`, `--beforeHwnd <hex>`, `--beforeTitleContains <text>`, `--beforeProcessName <name>`, `--beforeProcessId <id>`, `--beforeApp <name>` (alias for `--beforeProcessName`), `--beforePid <id>` (alias for `--beforeProcessId`)
-- **after-target flags** (standard): `--focused` (default), `--desktop`, `--screenIndex`, `--hwnd`, `--titleContains`, `--processName`, `--processId`, `--app`, `--pid`
-- `--depth <n>` (default 6): applied to both snapshots
-- `--maxNodes <n>` (default 5000): applied to both snapshots
-- `--includeProperties basic|all` (default basic): applied to both snapshots
-- output: `snapshotIdBefore`, `snapshotIdAfter`, `delta` object with `added` (array of `{ subtree, ancestors }`), `removed` (array of `{ subtree, ancestors }`), and `truncated` flag
-- caveat: when `maxNodes` limit is hit, real subtrees may appear removed; use identical `--depth` and `--maxNodes` on both sides for correct diff
-
-## Error envelope
-
-All results include a `meta` object (traceId, timestamp, durationMs, optional warning) and optional `error` object:
-
-```json
-{
-  "ok": false,
-  "meta": { "traceId": "...", "timestamp": "...", "durationMs": 50 },
-  "error": {
-    "code": "ElementNotFound",
-    "message": "...",
-    "details": {
-      "candidates": [
-        { "controlType": "Edit", "name": "Search", "automationId": "SearchBox", "rect": { "x": 10, "y": 20, "width": 100, "height": 25 } }
-      ]
-    }
-  }
-}
-```
-
-- `error.details.candidates` (optional): ranked "did you mean" elements (up to 3) when `click`, `invoke`, `set-value`, `type`, `scroll`, or `element get` can't resolve the selector/element. Each candidate has `controlType`, `name`, `automationId`, `rect`.
-  - `find`'s zero-match behavior is unchanged: `ok=true` with empty `matches` array (no error envelope, no hints)
 
 ## Exit codes
 

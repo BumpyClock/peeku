@@ -14,7 +14,6 @@ internal static class CliActionCommands
     root.Add(CreateTypeCommand());
     root.Add(CreateScrollCommand());
     root.Add(CreateHotkeyCommand());
-    root.Add(CreatePressCommand());
   }
 
   private static Command CreateClickCommand()
@@ -306,62 +305,6 @@ internal static class CliActionCommands
 
       CliOutput.Write(res, ctx.Format);
       return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
-    });
-
-    return cmd;
-  }
-
-  private static Command CreatePressCommand()
-  {
-    var cmd = new Command("press", "Press one or more named keys in sequence (e.g. enter, tab, down, f5)");
-
-    // Positional keys (one or more). Distinct from hotkey: these are discrete keys, not a chord.
-    var keysArg = new Argument<string[]>("keys")
-    {
-      Description = "Named keys to press in order, e.g. enter | tab tab | down",
-      Arity = ArgumentArity.OneOrMore,
-    };
-
-    var countOpt = new Option<int>("--count") { Description = "Repeat the whole key sequence N times" };
-    countOpt.DefaultValueFactory = _ => 1;
-
-    var delayOpt = new Option<int?>("--delay-ms") { Description = "Delay between keys (ms)" };
-    var holdOpt = new Option<int?>("--hold-ms") { Description = "Hold each key down this long before release (ms)" };
-
-    cmd.Add(keysArg);
-    cmd.Add(countOpt);
-    cmd.Add(delayOpt);
-    cmd.Add(holdOpt);
-
-    // Target flags so press can focus a specific window before sending keys.
-    var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
-
-    cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
-    {
-      var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
-
-      var keys = parse.GetValue(keysArg) ?? Array.Empty<string>();
-      if (keys.Length == 0)
-      {
-        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "At least one key is required."));
-      }
-
-      if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
-      {
-        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
-      }
-
-      var client = CliPeekuClient.CreateDefault();
-      var res = await client.PressAsync(new PressRequest(
-        Keys: keys,
-        Count: parse.GetValue(countOpt),
-        DelayMs: parse.GetValue(delayOpt),
-        HoldMs: parse.GetValue(holdOpt),
-        Target: target), cts.Token).ConfigureAwait(false);
-
-      CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;

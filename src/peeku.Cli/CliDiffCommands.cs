@@ -94,7 +94,7 @@ internal static class CliDiffCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       // Parse AFTER target (defaults to focused)
       if (!CliTargets.TryParseOrDefaultFocused(parse, afterOpts, out var targetAfter, out var afterTargetError))
@@ -121,9 +121,9 @@ internal static class CliDiffCommands
         IncludeProperties: props);
 
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.DiffAsync(req, cts.Token).ConfigureAwait(false);
+      var res = await client.DiffAsync(req, scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -205,15 +205,4 @@ internal static class CliDiffCommands
     => string.Equals(raw, "all", StringComparison.OrdinalIgnoreCase)
       ? UiaPropertiesMode.All
       : UiaPropertiesMode.Basic;
-
-  private static CancellationTokenSource CreateTimeoutCts(TimeSpan timeout, CancellationToken ct)
-  {
-    var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    if (timeout > TimeSpan.Zero)
-    {
-      cts.CancelAfter(timeout);
-    }
-
-    return cts;
-  }
 }
