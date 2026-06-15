@@ -2,13 +2,44 @@
 
 ## Run (stdio)
 
+Point your MCP host at the published `peeku-mcp.exe` (built alongside the CLI in `dist/`):
+
 ```powershell
-dotnet run --project src/peeku.Mcp -c Release
+# Publish once (emits peeku.exe, peeku-daemon.exe, peeku-mcp.exe into dist\)
+dotnet publish src/peeku.Cli -c Release -r win-x64 --self-contained `
+  -p:PublishSingleFile=true -p:PublishReadyToRun=true -o dist/
 ```
 
 Notes:
 - MCP protocol over stdin/stdout; logs on stderr.
 - Tools surfaced from `peeku.ToolRegistry` (name/title/description + schemas).
+
+## Example client config (command)
+
+```json
+{
+  "mcpServers": {
+    "peeku": {
+      "command": "C:\\path\\to\\dist\\peeku-mcp.exe"
+    }
+  }
+}
+```
+
+Replace `C:\\path\\to\\dist\\` with the absolute path to your `dist\` directory (or add `dist\` to PATH and omit the directory prefix).
+
+### Dev / contributing (without publishing)
+
+```json
+{
+  "mcpServers": {
+    "peeku": {
+      "command": "dotnet",
+      "args": ["run", "--project", "src/peeku.Mcp", "-c", "Release", "--no-build"]
+    }
+  }
+}
+```
 
 ## Tools
 
@@ -31,19 +62,6 @@ Names:
 - `peeku_observe`
 - `peeku_wait`
 - `peeku_batch`
-
-## Example client config (command)
-
-```json
-{
-  "mcpServers": {
-    "peeku": {
-      "command": "dotnet",
-      "args": ["run", "--project", "src/peeku.Mcp", "-c", "Release", "--no-build"]
-    }
-  }
-}
-```
 
 ## Example tool calls (arguments)
 

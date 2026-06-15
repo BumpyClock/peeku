@@ -1,19 +1,35 @@
 # peeku CLI
 
-## Run
+## Install
+
+Build a self-contained single-file binary and put it on PATH:
 
 ```powershell
-dotnet run --project src/peeku.Cli -c Release
+dotnet publish src/peeku.Cli -c Release -r win-x64 --self-contained `
+  -p:PublishSingleFile=true -p:PublishReadyToRun=true -o dist/
+# Add dist\ to your PATH, or copy dist\peeku.exe to a directory already on PATH.
+# dist\ also contains peeku-daemon.exe and peeku-mcp.exe.
 ```
 
 - stdin/stdout: command output on stdout
 - logs: stderr (Serilog)
 
+## Run
+
+```powershell
+peeku --help
+peeku --format json windows list --limit 10
+peeku click "OK" --app notepad
+peeku type "hello" --app notepad
+peeku find "Save" --app notepad
+peeku see --app notepad --depth 3
+```
+
 ## Global options (recursive)
 
 Use before/after subcommands.
 
-- `--format pretty|json` (default `pretty`)
+- `--format json|pretty` (default `json`)
 - `--timeout 00:00:10` (default 10s; applied per command)
 - `--log-level trace|debug|info|warn|error` (default `info`)
 - `--log-file <path>` (optional)
@@ -257,5 +273,27 @@ peeku batch --in ops.json --stop-on-error true
 
 ## Exit codes
 
-- `0`: ok=true
-- `1`: ok=false
+| Code | Class | `error.code` values |
+|------|-------|---------------------|
+| `0` | Success | — (`ok=true`) |
+| `1` | Generic failure | `Unknown`, `Internal` |
+| `2` | Usage / validation | `InvalidArgument`; also parser-level errors (unknown flags, missing required) |
+| `3` | Not found | `NotFound`, `ElementNotFound`, `WindowNotFound`, `SnapshotNotFound` |
+| `4` | Timeout (wall-clock) | `Timeout` |
+| `5` | Daemon unreachable | `Unavailable` |
+| `6` | Permission denied | `PermissionDenied` |
+| `7` | Not supported | `NotSupported` |
+| `8` | User cancellation (Ctrl-C) | `Canceled` |
+
+> **Known P1 limitation:** wall-clock timeouts currently surface as exit code `8` (`Canceled`) rather than `4` (`Timeout`). The deadline-flag refinement that splits the two is pending.
+
+## Contributing / dev
+
+For development without publishing, run directly via the SDK:
+
+```powershell
+dotnet run --project src/peeku.Cli -c Release -- --help
+dotnet run --project src/peeku.Cli -c Release -- --format json windows list --limit 10
+```
+
+This pays MSBuild up-to-date check + cold JIT on every invocation. For repeated use, publish once and use the binary.
