@@ -47,7 +47,7 @@ internal static class CliFlowCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
       {
@@ -65,7 +65,7 @@ internal static class CliFlowCommands
       try
       {
         var client = CliPeekuClient.CreateDefault();
-        await foreach (var ev in client.ObserveAsync(req, cts.Token).ConfigureAwait(false))
+        await foreach (var ev in client.ObserveAsync(req, scope.Token).ConfigureAwait(false))
         {
           events.Add(ev);
         }
@@ -163,7 +163,7 @@ internal static class CliFlowCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       // --in wins; else the positional source. Both accept a path or "-".
       var inFlag = parse.GetValue(inOpt);
@@ -246,10 +246,10 @@ internal static class CliFlowCommands
         var client = CliPeekuClient.CreateDefault();
         var res = await client.BatchAsync(new BatchRequest(
           Ops: ops,
-          StopOnError: stopOnError), cts.Token).ConfigureAwait(false);
+          StopOnError: stopOnError), scope.Token).ConfigureAwait(false);
 
         CliOutput.Write(res, ctx.Format);
-        return res.Ok ? 0 : ExitCodes.For(res.Error);
+        return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
       }
     });
 
@@ -333,9 +333,11 @@ internal static class CliFlowCommands
       while (!ct.IsCancellationRequested)
       {
         FindResult res;
-        using (var callCts = CreateTimeoutCts(ctx.Timeout, ct))
+        bool callDeadlineElapsed;
+        using (var callScope = TimeoutScope.Create(ctx.Timeout, ct))
         {
-          res = await daemonClient.FindAsync(request, callCts.Token).ConfigureAwait(false);
+          res = await daemonClient.FindAsync(request, callScope.Token).ConfigureAwait(false);
+          callDeadlineElapsed = callScope.DeadlineElapsed;
         }
 
         if (!res.Ok)
@@ -349,7 +351,7 @@ internal static class CliFlowCommands
             error = res.Error,
             meta = res.Meta,
           });
-          return ExitCodes.For(res.Error);
+          return ExitCodes.For(res.Error, callDeadlineElapsed);
         }
 
         var signature = BuildMatchSignature(res.Matches);
@@ -390,17 +392,6 @@ internal static class CliFlowCommands
   // Short connect/ping budget for the watch daemon probe so a stale marker no longer costs a
   // full command --timeout (PID-liveness already filters dead markers). (plan §6)
   private static readonly TimeSpan DaemonProbeBudget = TimeSpan.FromMilliseconds(300);
-
-  private static CancellationTokenSource CreateTimeoutCts(TimeSpan timeout, CancellationToken ct)
-  {
-    var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    if (timeout > TimeSpan.Zero)
-    {
-      cts.CancelAfter(timeout);
-    }
-
-    return cts;
-  }
 
   private static bool TryCreateDaemonClient(CliContext ctx, out IPeekuClient client, out string error)
   {

@@ -350,13 +350,11 @@ All results include a `meta` object (traceId, timestamp, durationMs, optional wa
 | `1` | Generic failure | `Unknown`, `Internal` |
 | `2` | Usage / validation | `InvalidArgument`; also parser-level errors (unknown flags, missing required) |
 | `3` | Not found | `NotFound`, `ElementNotFound`, `WindowNotFound`, `SnapshotNotFound` |
-| `4` | Timeout (wall-clock) | `Timeout` |
+| `4` | Timeout (wall-clock `--timeout` elapsed) | `Timeout`; also `Canceled` when the CLI deadline fires before Ctrl-C |
 | `5` | Daemon unreachable | `Unavailable` |
 | `6` | Permission denied | `PermissionDenied` |
 | `7` | Not supported | `NotSupported` |
-| `8` | User cancellation (Ctrl-C) | `Canceled` |
-
-> **Known P1 limitation:** wall-clock timeouts currently surface as exit code `8` (`Canceled`) rather than `4` (`Timeout`). The deadline-flag refinement that splits the two is pending.
+| `8` | Ctrl-C / SIGINT cancellation | `Canceled` (only when invocation token fires, not a wall-clock deadline) |
 
 ## Contributing / dev
 

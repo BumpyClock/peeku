@@ -42,7 +42,7 @@ internal static class CliActionCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
@@ -61,10 +61,10 @@ internal static class CliActionCommands
         Element: elementRef,
         Selector: selector,
         Target: target,
-        Method: method), cts.Token).ConfigureAwait(false);
+        Method: method), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -79,7 +79,7 @@ internal static class CliActionCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
@@ -95,10 +95,10 @@ internal static class CliActionCommands
       var res = await client.InvokeAsync(new InvokeRequest(
         Element: elementRef,
         Selector: selector,
-        Target: target), cts.Token).ConfigureAwait(false);
+        Target: target), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -118,7 +118,7 @@ internal static class CliActionCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
@@ -137,10 +137,10 @@ internal static class CliActionCommands
         Element: elementRef,
         Selector: selector,
         Target: target,
-        Value: value), cts.Token).ConfigureAwait(false);
+        Value: value), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -175,7 +175,7 @@ internal static class CliActionCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       // type's positional is TEXT, not a selector: --ref/--selector are OPTIONAL (both may be
       // null), so `type "hello" --app notepad` types into the target-resolved window.
@@ -212,10 +212,10 @@ internal static class CliActionCommands
         Target: target,
         Text: text,
         Append: append,
-        DelayMs: parse.GetValue(delayOpt)), cts.Token).ConfigureAwait(false);
+        DelayMs: parse.GetValue(delayOpt)), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -250,7 +250,7 @@ internal static class CliActionCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
@@ -278,10 +278,10 @@ internal static class CliActionCommands
         Target: target,
         Delta: delta,
         Lines: lines,
-        Direction: direction), cts.Token).ConfigureAwait(false);
+        Direction: direction), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -298,14 +298,14 @@ internal static class CliActionCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       var keys = parse.GetValue(keysOpt) ?? "";
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.HotkeyAsync(new HotkeyRequest(Keys: keys), cts.Token).ConfigureAwait(false);
+      var res = await client.HotkeyAsync(new HotkeyRequest(Keys: keys), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -379,14 +379,4 @@ internal static class CliActionCommands
       ? ScrollDirection.Horizontal
       : ScrollDirection.Vertical;
 
-  private static CancellationTokenSource CreateTimeoutCts(TimeSpan timeout, CancellationToken ct)
-  {
-    var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    if (timeout > TimeSpan.Zero)
-    {
-      cts.CancelAfter(timeout);
-    }
-
-    return cts;
-  }
 }

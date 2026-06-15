@@ -52,7 +52,7 @@ internal static class CliUiaCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
       {
@@ -68,9 +68,9 @@ internal static class CliUiaCommands
         IncludeProperties: props);
 
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.UiaSnapshotAsync(req, cts.Token).ConfigureAwait(false);
+      var res = await client.UiaSnapshotAsync(req, scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -111,7 +111,7 @@ internal static class CliUiaCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
       {
@@ -128,9 +128,9 @@ internal static class CliUiaCommands
         IncludeProperties: props);
 
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.SeeAsync(req, cts.Token).ConfigureAwait(false);
+      var res = await client.SeeAsync(req, scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -165,7 +165,7 @@ internal static class CliUiaCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliSelection.TryParseSelectorOnly(parse, selectorOpt, queryArg, liveOpt, out var selector, out var selectorError))
       {
@@ -183,9 +183,9 @@ internal static class CliUiaCommands
         Limit: parse.GetValue(limitOpt));
 
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.FindAsync(req, cts.Token).ConfigureAwait(false);
+      var res = await client.FindAsync(req, scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -195,7 +195,6 @@ internal static class CliUiaCommands
   {
     var element = new Command("element", "Element inspection");
     element.Add(CreateElementGetCommand());
-    element.Add(CreateElementAtPointCommand());
     return element;
   }
 
@@ -241,7 +240,7 @@ internal static class CliUiaCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       var refId = parse.GetValue(refOpt);
       var snapshotId = parse.GetValue(snapshotIdOpt);
@@ -276,71 +275,12 @@ internal static class CliUiaCommands
         IncludeProperties: props);
 
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.ElementGetAsync(req, cts.Token).ConfigureAwait(false);
+      var res = await client.ElementGetAsync(req, scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
-  }
-
-  private static Command CreateElementAtPointCommand()
-  {
-    var cmd = new Command("at-point", "Resolve element at screen pixel (hit-test)");
-
-    var xOpt = new Option<int>("--x") { Description = "Physical screen X coordinate" };
-    xOpt.Required = true;
-
-    var yOpt = new Option<int>("--y") { Description = "Physical screen Y coordinate" };
-    yOpt.Required = true;
-
-    var propsOpt = new Option<string>("--includeProperties") { Description = "basic|all" };
-    propsOpt.DefaultValueFactory = _ => "all";
-    propsOpt.Validators.Add(r =>
-    {
-      var v = r.GetValueOrDefault<string>() ?? "all";
-      if (!string.Equals(v, "basic", StringComparison.OrdinalIgnoreCase) &&
-          !string.Equals(v, "all", StringComparison.OrdinalIgnoreCase))
-      {
-        r.AddError("Invalid --includeProperties. Allowed: basic|all");
-      }
-    });
-
-    cmd.Add(xOpt);
-    cmd.Add(yOpt);
-    cmd.Add(propsOpt);
-
-    cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
-    {
-      var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
-
-      var props = ParseProps(parse.GetValue(propsOpt));
-
-      var req = new ElementAtPointRequest(
-        X: parse.GetValue(xOpt),
-        Y: parse.GetValue(yOpt),
-        Target: null,
-        IncludeProperties: props);
-
-      var client = CliPeekuClient.CreateDefault();
-      var res = await client.ElementAtPointAsync(req, cts.Token).ConfigureAwait(false);
-      CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
-    });
-
-    return cmd;
-  }
-
-  private static CancellationTokenSource CreateTimeoutCts(TimeSpan timeout, CancellationToken ct)
-  {
-    var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    if (timeout > TimeSpan.Zero)
-    {
-      cts.CancelAfter(timeout);
-    }
-
-    return cts;
   }
 
   private static UiaPropertiesMode ParseProps(string? raw)

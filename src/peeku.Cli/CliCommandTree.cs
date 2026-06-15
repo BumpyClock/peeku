@@ -27,12 +27,12 @@ internal static class CliCommandTree
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.DoctorAsync(new global::peeku.DoctorRequest(Deep: parse.GetValue(deepOpt)), cts.Token).ConfigureAwait(false);
+      var res = await client.DoctorAsync(new global::peeku.DoctorRequest(Deep: parse.GetValue(deepOpt)), scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -109,7 +109,7 @@ internal static class CliCommandTree
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       var client = CliPeekuClient.CreateDefault();
       var req = new global::peeku.WindowsListRequest(
@@ -117,7 +117,7 @@ internal static class CliCommandTree
         ProcessName: parse.GetValue(processNameOpt),
         Limit: parse.GetValue(limitOpt));
 
-      var res = await client.WindowsListAsync(req, cts.Token).ConfigureAwait(false);
+      var res = await client.WindowsListAsync(req, scope.Token).ConfigureAwait(false);
 
       if (res.Ok && !parse.GetValue(includeMinimizedOpt))
       {
@@ -143,7 +143,7 @@ internal static class CliCommandTree
       }
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -156,12 +156,12 @@ internal static class CliCommandTree
     cmd.SetAction(async (ParseResult _, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.WindowsFocusedAsync(cts.Token).ConfigureAwait(false);
+      var res = await client.WindowsFocusedAsync(scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
@@ -210,7 +210,7 @@ internal static class CliCommandTree
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       var hwndRaw = parse.GetValue(hwndOpt);
       var target = string.IsNullOrWhiteSpace(hwndRaw)
@@ -223,23 +223,12 @@ internal static class CliCommandTree
         IncludeBase64: parse.GetValue(includeBase64Opt));
 
       var client = CliPeekuClient.CreateDefault();
-      var res = await client.CaptureImageAsync(req, cts.Token).ConfigureAwait(false);
+      var res = await client.CaptureImageAsync(req, scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : ExitCodes.For(res.Error);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });
 
     return cmd;
-  }
-
-  private static CancellationTokenSource CreateTimeoutCts(TimeSpan timeout, CancellationToken ct)
-  {
-    var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    if (timeout > TimeSpan.Zero)
-    {
-      cts.CancelAfter(timeout);
-    }
-
-    return cts;
   }
 
   private static string? CombineWarnings(string? a, string? b)
