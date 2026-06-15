@@ -41,6 +41,7 @@ public static class ToolRegistry
       Create("peeku_observe", "Observe", "Observe UIA events (bounded).", ObserveInputSchemaJson, ObserveOutputSchemaJson),
       Create("peeku_wait", "Wait", "Wait until selector matches.", WaitInputSchemaJson, WaitOutputSchemaJson),
       Create("peeku_batch", "Batch", "Execute a batch of tool calls.", BatchInputSchemaJson, BatchOutputSchemaJson),
+      Create("peeku_diff", "Diff", "Snapshot two targets and diff their UIA trees by refId.", DiffInputSchemaJson, DiffOutputSchemaJson),
     ];
   }
 
@@ -126,5 +127,8 @@ public static class ToolRegistry
 
   private const string BatchInputSchemaJson = """{"type":"object","properties":{"ops":{"type":"array","items":{"type":"object","properties":{"tool":{"type":"string"},"args":{"type":"object"}},"required":["tool","args"]}},"stopOnError":{"type":"boolean","default":true}},"required":["ops"]}""";
   private const string BatchOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"results":{"type":"array","items":{"type":"object","properties":{"tool":{"type":"string"},"ok":{"type":"boolean"},"durationMs":{"type":"integer"},"result":{},"error":{"type":"object"}},"required":["tool","ok","durationMs"]}}},"required":["ok","traceId","results"]}""";
+
+  private const string DiffInputSchemaJson = """{"type":"object","properties":{"targetBefore":{"description":"Before snapshot target","oneOf":[{"type":"string","enum":["desktop","focused_window","screen","window_hwnd","window_query"]},{"type":"object","properties":{"kind":{"type":"string","enum":["desktop","focused_window","screen","window_hwnd","window_query"]},"screenIndex":{"type":"integer"},"hwndHex":{"type":"string"},"query":{"type":"object","properties":{"titleContains":{"type":"string"},"processName":{"type":"string"},"processId":{"type":"integer"}}}},"required":["kind"]}]},"targetAfter":{"description":"After snapshot target","oneOf":[{"type":"string","enum":["desktop","focused_window","screen","window_hwnd","window_query"]},{"type":"object","properties":{"kind":{"type":"string","enum":["desktop","focused_window","screen","window_hwnd","window_query"]},"screenIndex":{"type":"integer"},"hwndHex":{"type":"string"},"query":{"type":"object","properties":{"titleContains":{"type":"string"},"processName":{"type":"string"},"processId":{"type":"integer"}}}},"required":["kind"]}]},"depth":{"type":"integer","default":6},"maxNodes":{"type":"integer","default":5000},"includeProperties":{"type":"string","enum":["basic","all"],"default":"basic"}},"required":["targetBefore","targetAfter"]}""";
+  private const string DiffOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"snapshotIdBefore":{"type":"string"},"snapshotIdAfter":{"type":"string"},"delta":{"type":"object","properties":{"added":{"type":"array","items":{"type":"object"}},"removed":{"type":"array","items":{"type":"object"}},"truncated":{"type":"boolean"}}}},"required":["ok","traceId"]}""";
 }
 

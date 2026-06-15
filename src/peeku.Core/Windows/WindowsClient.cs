@@ -221,6 +221,9 @@ public sealed class WindowsClient : IPeekuClient
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => BatchRunner.RunAsync(this, req, ct);
 
+  public Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default)
+    => new UiaClient().DiffAsync(req, ct);
+
   private static string? CombineWarnings(string? a, string? b)
   {
     if (string.IsNullOrWhiteSpace(a))

@@ -361,6 +361,24 @@ internal sealed class DaemonPeekuClient : IPeekuClient
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => _rpc.CallAsync<BatchResult>("peeku.batch", req, ct);
 
+  public Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["targetBefore"] = BuildTarget(req.TargetBefore),
+      ["targetAfter"] = BuildTarget(req.TargetAfter),
+      ["depth"] = req.Depth,
+      ["maxNodes"] = req.MaxNodes,
+      ["includeProperties"] = UiaModeString(req.IncludeProperties),
+    };
+
+    return CallResultAsync(
+      "peeku_diff",
+      args,
+      (meta, error) => new DiffResult(false, meta, null, null, null, error),
+      ct);
+  }
+
   private async Task<T> CallResultAsync<T>(
     string tool,
     object args,

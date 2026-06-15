@@ -31,6 +31,7 @@ public sealed class ToolRegistryTests
         "peeku_observe",
         "peeku_wait",
         "peeku_batch",
+        "peeku_diff",
       };
 
     var actual = ToolRegistry.All.Select(x => x.Name).ToArray();

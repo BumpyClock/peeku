@@ -192,6 +192,9 @@ public sealed class ToolParityTests
     // Require both selector and target.
     "peeku_wait"            => """{"selector":"window","target":"desktop"}""",
 
+    // Require both targetBefore and targetAfter.
+    "peeku_diff"            => """{"targetBefore":"desktop","targetAfter":"desktop"}""",
+
     _ => "{}",
   };
 
@@ -279,6 +282,9 @@ file sealed class ThrowingFakeClient : IPeekuClient
 
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => Task.FromException<BatchResult>(new NotImplementedException(nameof(BatchAsync)));
+
+  public Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default)
+    => Task.FromException<DiffResult>(new NotImplementedException(nameof(DiffAsync)));
 
 #pragma warning disable CS1998 // async method lacks await — intentional (throws before any yield)
   private static async IAsyncEnumerable<ObservationEvent> ThrowAsyncEnumerable(

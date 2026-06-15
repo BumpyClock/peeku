@@ -372,6 +372,29 @@ internal static class BatchRunner
           return (true, list, null);
         }
 
+        case "peeku_diff":
+        {
+          if (!BatchArgs.TryReadNamedTarget(args, "targetBefore", out var targetBefore, out var beforeError))
+          {
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, beforeError ?? "Invalid targetBefore."));
+          }
+
+          if (!BatchArgs.TryReadNamedTarget(args, "targetAfter", out var targetAfter, out var afterError))
+          {
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, afterError ?? "Invalid targetAfter."));
+          }
+
+          var req = new DiffRequest(
+            TargetBefore: targetBefore,
+            TargetAfter: targetAfter,
+            Depth: BatchArgs.ReadInt(args, "depth") ?? 6,
+            MaxNodes: BatchArgs.ReadInt(args, "maxNodes") ?? 5000,
+            IncludeProperties: BatchArgs.ReadUiaPropertiesMode(args, "includeProperties") ?? UiaPropertiesMode.Basic);
+
+          var res = await client.DiffAsync(req, ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
         default:
           return (false, null, PeekuErrors.Create(PeekuErrorCode.NotSupported, "Unknown tool.", new { tool }));
       }

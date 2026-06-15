@@ -29,6 +29,8 @@ public interface IPeekuClient
   Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default);
 
   Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default);
+
+  Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default);
 }
 
 public abstract record Target
@@ -326,4 +328,28 @@ public record BatchResult(
   bool Ok,
   ResultMeta Meta,
   IReadOnlyList<BatchStepResult> Results,
+  PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+
+public record DiffRequest(
+  Target TargetBefore,
+  Target TargetAfter,
+  int Depth = 6,
+  int MaxNodes = 5000,
+  UiaPropertiesMode IncludeProperties = UiaPropertiesMode.Basic);
+
+public record UiaDeltaRoot(
+  UiaNode Subtree,
+  IReadOnlyList<UiaElement> Ancestors);
+
+public record UiaTreeDelta(
+  IReadOnlyList<UiaDeltaRoot> Added,
+  IReadOnlyList<UiaDeltaRoot> Removed,
+  bool Truncated);
+
+public record DiffResult(
+  bool Ok,
+  ResultMeta Meta,
+  string? SnapshotIdBefore,
+  string? SnapshotIdAfter,
+  UiaTreeDelta? Delta = null,
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);

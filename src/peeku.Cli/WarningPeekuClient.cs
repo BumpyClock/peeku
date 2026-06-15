@@ -74,6 +74,9 @@ internal sealed class WarningPeekuClient : IPeekuClient
   public async Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => WithWarning(await _inner.BatchAsync(req, ct).ConfigureAwait(false));
 
+  public async Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.DiffAsync(req, ct).ConfigureAwait(false));
+
   private T WithWarning<T>(T result) where T : ResultBase
   {
     var existing = result.Meta.Warning ?? "";

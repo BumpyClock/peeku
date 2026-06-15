@@ -467,6 +467,52 @@ internal static class BatchArgs
     return null;
   }
 
+  internal static bool TryReadNamedTarget(JsonElement args, string propName, out Target target, out string? error)
+  {
+    target = new Target.FocusedWindow();
+    error = null;
+
+    if (args.ValueKind != JsonValueKind.Object)
+    {
+      error = "Args must be an object.";
+      return false;
+    }
+
+    if (!TryGet(args, propName, out var t))
+    {
+      error = $"'{propName}' is required.";
+      return false;
+    }
+
+    if (t.ValueKind == JsonValueKind.String)
+    {
+      return TryTargetFromKind(t.GetString() ?? "", out target, out error);
+    }
+
+    if (t.ValueKind != JsonValueKind.Object)
+    {
+      error = $"'{propName}' must be an object or string.";
+      return false;
+    }
+
+    if (TryGet(t, "kind", out var kindEl) && kindEl.ValueKind == JsonValueKind.String)
+    {
+      return TryTargetFromKind(kindEl.GetString() ?? "", out target, out error, t);
+    }
+
+    foreach (var p in t.EnumerateObject())
+    {
+      var key = p.Name.Trim();
+      if (TryTargetFromKind(key, out target, out error, p.Value))
+      {
+        return true;
+      }
+    }
+
+    error = $"Unknown '{propName}' shape.";
+    return false;
+  }
+
   internal static (bool Ok, ElementRef? Element, Selector? Selector, Target? Target, PeekuError? Error) ReadSelection(JsonElement args)
   {
     var hasElement = TryReadElementRef(args, "elementRef", out var element, out _);

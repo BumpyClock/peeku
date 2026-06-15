@@ -14,6 +14,7 @@ internal static class CliCommandTree
     CliUiaCommands.AddAll(root);
     CliActionCommands.AddAll(root);
     CliFlowCommands.AddAll(root);
+    CliDiffCommands.AddAll(root);
   }
 
   private static Command CreateDoctorCommand()
