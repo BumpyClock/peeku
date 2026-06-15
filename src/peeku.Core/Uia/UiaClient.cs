@@ -416,6 +416,9 @@ public sealed partial class UiaClient : IPeekuClient
   public Task<FocusedWindowResult> WindowsFocusedAsync(CancellationToken ct = default)
     => throw new NotImplementedException();
 
+  public Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default)
+    => throw new NotImplementedException();
+
   public Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
 

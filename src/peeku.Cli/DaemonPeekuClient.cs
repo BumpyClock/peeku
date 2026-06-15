@@ -72,6 +72,20 @@ internal sealed class DaemonPeekuClient : IPeekuClient
       (meta, error) => new FocusedWindowResult(false, meta, null, error),
       ct);
 
+  public Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["target"] = BuildTarget(req.Target),
+    };
+
+    return CallResultAsync(
+      "peeku_windows_focus",
+      args,
+      (meta, error) => new FocusedWindowResult(false, meta, null, error),
+      ct);
+  }
+
   public Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct = default)
   {
     var args = new Dictionary<string, object?>
@@ -277,6 +291,36 @@ internal sealed class DaemonPeekuClient : IPeekuClient
 
     return CallResultAsync(
       "peeku_hotkey",
+      args,
+      (meta, error) => new ActionResult(false, meta, null, error),
+      ct);
+  }
+
+  public Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["keys"] = req.Keys,
+      ["count"] = req.Count,
+    };
+
+    if (req.DelayMs.HasValue)
+    {
+      args["delayMs"] = req.DelayMs.Value;
+    }
+
+    if (req.HoldMs.HasValue)
+    {
+      args["holdMs"] = req.HoldMs.Value;
+    }
+
+    if (req.Target is not null)
+    {
+      args["target"] = BuildTarget(req.Target);
+    }
+
+    return CallResultAsync(
+      "peeku_press",
       args,
       (meta, error) => new ActionResult(false, meta, null, error),
       ct);

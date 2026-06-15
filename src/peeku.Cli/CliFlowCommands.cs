@@ -409,7 +409,7 @@ internal static class CliFlowCommands
 
     if (!DaemonMarker.TryLoad(out var marker))
     {
-      error = "Watch requires daemon. Start with `peeku --daemon`.";
+      error = "Watch requires daemon. Start with `peeku daemon start`.";
       return false;
     }
 
@@ -417,7 +417,7 @@ internal static class CliFlowCommands
     if (!marker.IsAlive())
     {
       DaemonMarker.TryDeleteStale();
-      error = "Daemon unreachable. Restart with `peeku --daemon`.";
+      error = "Daemon unreachable. Restart with `peeku daemon start`.";
       return false;
     }
 
@@ -428,7 +428,7 @@ internal static class CliFlowCommands
       var ok = rpc.TryPingAsync(pingCts.Token).GetAwaiter().GetResult();
       if (!ok)
       {
-        error = "Daemon unreachable. Restart with `peeku --daemon`.";
+        error = "Daemon unreachable. Restart with `peeku daemon start`.";
         return false;
       }
 
@@ -437,7 +437,7 @@ internal static class CliFlowCommands
     }
     catch
     {
-      error = "Daemon unreachable. Restart with `peeku --daemon`.";
+      error = "Daemon unreachable. Restart with `peeku daemon start`.";
       return false;
     }
   }

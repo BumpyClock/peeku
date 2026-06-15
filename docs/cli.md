@@ -35,25 +35,31 @@ Use before/after subcommands.
 - `--log-file <path>` (optional)
 - `--trace-id <id>` (optional; else generated)
 - `--profile <name>` (reserved; no-op for now)
-- `--server` (run daemon server in foreground)
-- `--daemon` (spawn/stop daemon; see below)
-- `--stop` (stop daemon; requires `--daemon`)
 
 ## Daemon (fast mode)
 
 ```powershell
-peeku --server
-peeku --daemon
-peeku --daemon --stop
+peeku daemon start
+peeku daemon stop
+peeku daemon status
+peeku daemon serve
+peeku daemon          # same as status
 ```
 
-- `--daemon` spawns background daemon and writes `%LOCALAPPDATA%\peeku\daemon.json`
+- `daemon start` spawns background daemon and writes `%LOCALAPPDATA%\peeku\daemon.json` (idempotent; does nothing if already running)
 - When the marker exists, normal CLI commands connect to daemon by default
-- `watch` requires a running daemon (`peeku --daemon`)
+- `watch` requires a running daemon (`peeku daemon start`)
 - Lifecycle:
-  - foreground server: `peeku --server`
-  - background daemon: `peeku --daemon`
-  - manual stop: `peeku --daemon --stop`
+  - foreground server: `peeku daemon serve` (blocks until Ctrl-C)
+  - background daemon: `peeku daemon start`
+  - manual stop: `peeku daemon stop`
+- `daemon status` emits a machine-readable JSON envelope (always exits 0):
+  ```json
+  { "running": true, "pid": 12345, "pipeName": "peeku.user.v1",
+    "startedAt": "2026-06-15T10:00:00Z",
+    "protocolVersion": "1", "buildVersion": "0.1.0+abc" }
+  ```
+  `running: false` when no marker exists or ping fails; remaining fields omitted when not running.
 
 ## Commands (implemented)
 
@@ -247,7 +253,7 @@ peeku watch --selector "window[name~=\"Notepad\"]/edit"
 peeku watch --selector "window/button[name=\"OK\"]" --debounce-ms 100 --limit 20
 ```
 
-- daemon-only command (requires `peeku --daemon`)
+- daemon-only command (requires `peeku daemon start`)
 - live selector evaluation stream (`--live` semantics built in)
 - emits JSONL `watch.update` lines when match set changes
 - `--debounce-ms <n>` default `100`

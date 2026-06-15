@@ -54,6 +54,51 @@ internal static class BatchArgs
     return null;
   }
 
+  internal static IReadOnlyList<string>? ReadStringArray(JsonElement obj, string name)
+  {
+    if (obj.ValueKind != JsonValueKind.Object)
+    {
+      return null;
+    }
+
+    foreach (var p in obj.EnumerateObject())
+    {
+      if (!string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+      {
+        continue;
+      }
+
+      // Convenience: accept a bare string as a single-element array (e.g. "keys":"enter").
+      if (p.Value.ValueKind == JsonValueKind.String)
+      {
+        var single = p.Value.GetString();
+        return single is null ? null : new[] { single };
+      }
+
+      if (p.Value.ValueKind != JsonValueKind.Array)
+      {
+        return null;
+      }
+
+      var list = new List<string>();
+      foreach (var item in p.Value.EnumerateArray())
+      {
+        if (item.ValueKind == JsonValueKind.String)
+        {
+          var s = item.GetString();
+          if (s is not null)
+          {
+            list.Add(s);
+          }
+        }
+      }
+
+      return list;
+    }
+
+    return null;
+  }
+
   internal static bool? ReadBool(JsonElement obj, string name)
   {
     if (obj.ValueKind != JsonValueKind.Object)

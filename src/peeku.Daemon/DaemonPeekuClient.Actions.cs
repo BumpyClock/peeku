@@ -661,6 +661,12 @@ public sealed partial class DaemonPeekuClient
     }
   }
 
+  public Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default)
+  {
+    ThrowIfDisposed();
+    return KeyPress.PressAsync(req, ct);
+  }
+
   public Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default)
   {
     var scope = Results.Start();

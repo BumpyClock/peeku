@@ -8,6 +8,7 @@ public interface IPeekuClient
 
   Task<WindowListResult> WindowsListAsync(WindowsListRequest req, CancellationToken ct = default);
   Task<FocusedWindowResult> WindowsFocusedAsync(CancellationToken ct = default);
+  Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default);
 
   Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct = default);
 
@@ -22,6 +23,7 @@ public interface IPeekuClient
   Task<ActionResult> TypeAsync(TypeRequest req, CancellationToken ct = default);
   Task<ActionResult> ScrollAsync(ScrollRequest req, CancellationToken ct = default);
   Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default);
+  Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default);
 
   IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default);
   Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default);
@@ -110,6 +112,8 @@ public record FocusedWindowResult(
   ResultMeta Meta,
   WindowInfo? Window,
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+
+public record WindowFocusRequest(Target Target);
 
 public record CaptureImageRequest(
   Target Target,
@@ -255,6 +259,13 @@ public record ScrollRequest(
   ScrollDirection Direction = ScrollDirection.Vertical);
 
 public record HotkeyRequest(string Keys);
+
+public record PressRequest(
+  IReadOnlyList<string> Keys,
+  int Count = 1,
+  int? DelayMs = null,
+  int? HoldMs = null,
+  Target? Target = null);
 
 public record ActionResult(
   bool Ok,

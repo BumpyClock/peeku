@@ -1,6 +1,5 @@
 using System.CommandLine;
 using System.CommandLine.Invocation;
-using System.Reflection;
 using peeku;
 using Serilog;
 using Serilog.Events;
@@ -61,24 +60,12 @@ internal static class Program
     var profileOpt = new Option<string?>("--profile") { Description = "Optional profile name (reserved)" };
     profileOpt.Recursive = true;
 
-    var serverOpt = new Option<bool>("--server") { Description = "Run daemon server in foreground" };
-    serverOpt.Recursive = true;
-
-    var daemonOpt = new Option<bool>("--daemon") { Description = "Manage daemon (spawn/stop)" };
-    daemonOpt.Recursive = true;
-
-    var stopOpt = new Option<bool>("--stop") { Description = "Stop daemon (requires --daemon)" };
-    stopOpt.Recursive = true;
-
     root.Add(formatOpt);
     root.Add(timeoutOpt);
     root.Add(logLevelOpt);
     root.Add(logFileOpt);
     root.Add(traceIdOpt);
     root.Add(profileOpt);
-    root.Add(serverOpt);
-    root.Add(daemonOpt);
-    root.Add(stopOpt);
 
     CliCommandTree.AddCommands(root);
 
@@ -108,27 +95,6 @@ internal static class Program
 
     try
     {
-      var runServer = parse.GetValue(serverOpt);
-      var runDaemon = parse.GetValue(daemonOpt);
-      var stopDaemon = parse.GetValue(stopOpt);
-
-      if (runServer)
-      {
-        return await RunServerAsync().ConfigureAwait(false);
-      }
-
-      if (stopDaemon && !runDaemon)
-      {
-        // Usage error: --stop requires --daemon.
-        Log.Logger.Error("Stop requested without daemon flag");
-        return ExitCodes.Usage;
-      }
-
-      if (runDaemon)
-      {
-        return await RunDaemonAsync(stopDaemon).ConfigureAwait(false);
-      }
-
       // Parser/usage errors (unknown flags, missing required, validator AddError) never reach a
       // handler. Surface them as exit 2 (usage) instead of InvokeAsync's default 1. (plan §5)
       if (parse.Errors.Count > 0)
@@ -198,122 +164,4 @@ internal static class Program
     return loggerConfig.CreateLogger();
   }
 
-  private static async Task<int> RunServerAsync()
-  {
-    var runner = new DaemonServerRunner();
-    var pipeName = DefaultPipeName();
-    return await runner.RunAsync(pipeName, CancellationToken.None).ConfigureAwait(false);
-  }
-
-  private static async Task<int> RunDaemonAsync(bool stop)
-  {
-    return stop
-      ? await StopDaemonAsync().ConfigureAwait(false)
-      : await StartDaemonAsync().ConfigureAwait(false);
-  }
-
-  private static async Task<int> StartDaemonAsync()
-  {
-    var ctx = CliContextAccessor.Current;
-    if (DaemonMarker.TryLoad(out var existing))
-    {
-      // PID-liveness before the pipe ping: a dead/recycled PID means a stale marker; drop it
-      // and respawn rather than paying a full --timeout connect wait. (plan §6)
-      if (existing.IsAlive())
-      {
-        var pingClient = new DaemonJsonRpcClient(existing.PipeName, DaemonProbeBudget);
-        using var cts = new CancellationTokenSource(DaemonProbeBudget);
-        if (await pingClient.TryPingAsync(cts.Token).ConfigureAwait(false))
-        {
-          return 0;
-        }
-      }
-
-      DaemonMarker.TryDeleteStale();
-    }
-
-    try
-    {
-      var pipeName = DefaultPipeName();
-      var launcher = new DaemonProcessLauncher(Directory.GetCurrentDirectory());
-      var process = launcher.StartBackground(pipeName);
-      var marker = new DaemonMarker(pipeName, process.Id, DateTimeOffset.UtcNow, "1", BuildVersion());
-      marker.Save();
-      return 0;
-    }
-    catch (Exception ex)
-    {
-      ctx.Logger.Error(ex, "Daemon start failed");
-      // Daemon could not be spawned/reached -> unreachable.
-      return ExitCodes.Unavailable;
-    }
-  }
-
-  private static async Task<int> StopDaemonAsync()
-  {
-    var ctx = CliContextAccessor.Current;
-    if (!DaemonMarker.TryLoad(out var marker))
-    {
-      ctx.Logger.Error("Daemon marker not found");
-      // Nothing to stop -> daemon unreachable.
-      return ExitCodes.Unavailable;
-    }
-
-    // PID-liveness before the pipe round-trip: if the daemon is already dead, just clear the
-    // stale marker (idempotent success) instead of paying a connect timeout. (plan §6)
-    if (!marker.IsAlive())
-    {
-      DaemonMarker.TryDeleteStale();
-      return 0;
-    }
-
-    try
-    {
-      var rpc = new DaemonJsonRpcClient(marker.PipeName, DaemonProbeBudget);
-      using var cts = new CancellationTokenSource(DaemonProbeBudget);
-      var res = await rpc.CallAsync<DaemonOkResult>("server.shutdown", new Dictionary<string, object?>(), cts.Token).ConfigureAwait(false);
-      if (!res.Ok)
-      {
-        ctx.Logger.Error("Daemon shutdown returned not ok");
-        return ExitCodes.Unavailable;
-      }
-
-      DaemonMarker.TryDeleteStale();
-      return 0;
-    }
-    catch (Exception ex)
-    {
-      ctx.Logger.Error(ex, "Daemon shutdown failed");
-      return ExitCodes.Unavailable;
-    }
-  }
-
-  private static string DefaultPipeName()
-  {
-    var user = Environment.UserName;
-    var safeUser = string.IsNullOrWhiteSpace(user) ? "user" : user.Trim();
-    return $"peeku.{safeUser}.v1";
-  }
-
-  // Short connect/ping budget for daemon management so a stale marker no longer costs a full
-  // command --timeout (PID-liveness already filters dead markers). (plan §6)
-  private static readonly TimeSpan DaemonProbeBudget = TimeSpan.FromMilliseconds(300);
-
-  /// <summary>
-  /// Build version stamped into the daemon marker. Reads <see cref="AssemblyInformationalVersion"/>
-  /// (e.g. <c>0.1.0+sha</c>) so the CLI marker and the daemon self-report agree. (plan §6)
-  /// </summary>
-  private static string BuildVersion()
-  {
-    var info = Assembly.GetExecutingAssembly()
-      .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-      ?.InformationalVersion;
-    if (!string.IsNullOrWhiteSpace(info))
-    {
-      return info.Trim();
-    }
-
-    var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString();
-    return string.IsNullOrWhiteSpace(version) ? "0.0.0" : version;
-  }
 }

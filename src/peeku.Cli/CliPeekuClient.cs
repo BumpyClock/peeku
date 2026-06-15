@@ -52,6 +52,9 @@ internal sealed class CliPeekuClient : global::peeku.IPeekuClient
   public Task<global::peeku.FocusedWindowResult> WindowsFocusedAsync(CancellationToken ct = default)
     => _inner.WindowsFocusedAsync(ct);
 
+  public Task<global::peeku.FocusedWindowResult> WindowFocusAsync(global::peeku.WindowFocusRequest req, CancellationToken ct = default)
+    => _inner.WindowFocusAsync(req, ct);
+
   public Task<global::peeku.CaptureImageResult> CaptureImageAsync(global::peeku.CaptureImageRequest req, CancellationToken ct = default)
     => _inner.CaptureImageAsync(req, ct);
 
@@ -84,6 +87,9 @@ internal sealed class CliPeekuClient : global::peeku.IPeekuClient
 
   public Task<global::peeku.ActionResult> HotkeyAsync(global::peeku.HotkeyRequest req, CancellationToken ct = default)
     => _inner.HotkeyAsync(req, ct);
+
+  public Task<global::peeku.ActionResult> PressAsync(global::peeku.PressRequest req, CancellationToken ct = default)
+    => _inner.PressAsync(req, ct);
 
   public IAsyncEnumerable<global::peeku.ObservationEvent> ObserveAsync(global::peeku.ObserveRequest req, CancellationToken ct = default)
     => _inner.ObserveAsync(req, ct);

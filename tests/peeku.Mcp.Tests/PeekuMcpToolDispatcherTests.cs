@@ -120,6 +120,7 @@ public sealed class PeekuMcpToolDispatcherTests
 
     public Task<WindowListResult> WindowsListAsync(WindowsListRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<FocusedWindowResult> WindowsFocusedAsync(CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<UiaSnapshotResult> UiaSnapshotAsync(UiaSnapshotRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<SeeResult> SeeAsync(SeeRequest req, CancellationToken ct = default) => throw new NotImplementedException();
@@ -131,6 +132,7 @@ public sealed class PeekuMcpToolDispatcherTests
     public Task<ActionResult> TypeAsync(TypeRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<ActionResult> ScrollAsync(ScrollRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default) => throw new NotImplementedException();
   }

@@ -593,6 +593,9 @@ public sealed partial class UiaClient
     }
   }
 
+  public Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default)
+    => KeyPress.PressAsync(req, ct);
+
   public Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default)
   {
     var scope = Results.Start();

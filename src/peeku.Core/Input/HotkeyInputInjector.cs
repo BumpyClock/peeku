@@ -65,9 +65,69 @@ internal static class HotkeyInputInjector
     return true;
   }
 
+  /// <summary>
+  /// Resolves a single named key token (e.g. <c>enter</c>, <c>tab</c>, <c>f5</c>, <c>a</c>, <c>5</c>,
+  /// <c>down</c>) to its virtual-key spec, REUSING the same VK table / extended-key handling the
+  /// hotkey chord parser uses (no duplicate mapping). Modifier-only tokens (<c>ctrl</c>/<c>shift</c>/…)
+  /// are rejected here: <c>press</c> is for discrete keys, not chords — use <c>hotkey</c> for those.
+  /// </summary>
+  public static bool TryResolveKey(string name, out KeySpec key, out string? error)
+  {
+    key = default;
+    error = null;
+
+    if (string.IsNullOrWhiteSpace(name))
+    {
+      error = "Key name is required.";
+      return false;
+    }
+
+    var token = Canon(name);
+    if (token.Length == 0)
+    {
+      error = "Key name is required.";
+      return false;
+    }
+
+    if (TryGetModifier(token, out _))
+    {
+      error = $"'{name}' is a modifier; use hotkey for chords (e.g. CTRL+S). press takes discrete keys.";
+      return false;
+    }
+
+    if (!TryGetKey(token, out key))
+    {
+      error = $"Unknown key name: '{name}'.";
+      return false;
+    }
+
+    return true;
+  }
+
+  /// <summary>
+  /// Sends a single key as a keydown then keyup. When <paramref name="holdMs"/> &gt; 0 the key is held
+  /// down for that interval before release. Foreground/global: keys land on whatever window has focus.
+  /// </summary>
+  public static async Task SendKeyAsync(KeySpec key, int holdMs, CancellationToken ct)
+  {
+    SendInputs(new[] { KeyDown(key) });
+
+    if (holdMs > 0)
+    {
+      await Task.Delay(holdMs, ct).ConfigureAwait(false);
+    }
+
+    SendInputs(new[] { KeyUp(key) });
+  }
+
   public static void Send(HotkeyChord chord)
   {
     var inputs = BuildInputs(chord);
+    SendInputs(inputs);
+  }
+
+  private static void SendInputs(INPUT[] inputs)
+  {
     if (inputs.Length == 0)
     {
       return;

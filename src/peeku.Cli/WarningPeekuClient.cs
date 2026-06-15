@@ -26,6 +26,9 @@ internal sealed class WarningPeekuClient : IPeekuClient
   public async Task<FocusedWindowResult> WindowsFocusedAsync(CancellationToken ct = default)
     => WithWarning(await _inner.WindowsFocusedAsync(ct).ConfigureAwait(false));
 
+  public async Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.WindowFocusAsync(req, ct).ConfigureAwait(false));
+
   public async Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct = default)
     => WithWarning(await _inner.CaptureImageAsync(req, ct).ConfigureAwait(false));
 
@@ -58,6 +61,9 @@ internal sealed class WarningPeekuClient : IPeekuClient
 
   public async Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default)
     => WithWarning(await _inner.HotkeyAsync(req, ct).ConfigureAwait(false));
+
+  public async Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.PressAsync(req, ct).ConfigureAwait(false));
 
   public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default)
     => _inner.ObserveAsync(req, ct);

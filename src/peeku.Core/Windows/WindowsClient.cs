@@ -68,6 +68,9 @@ public sealed class WindowsClient : IPeekuClient
     }
   }
 
+  public Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default)
+    => WindowFocus.WindowFocusAsync(req, ct);
+
   public Task<DoctorResult> DoctorAsync(DoctorRequest req, CancellationToken ct = default)
     => throw new NotImplementedException();
 
@@ -205,6 +208,9 @@ public sealed class WindowsClient : IPeekuClient
 
   public Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default)
     => new UiaClient().HotkeyAsync(req, ct);
+
+  public Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default)
+    => new UiaClient().PressAsync(req, ct);
 
   public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default)
     => UiaObserve.ObserveAsync(req, ct);

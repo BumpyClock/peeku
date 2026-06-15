@@ -95,6 +95,9 @@ public sealed class ToolParityTests
     {
       ["peeku_windows_list"]    = "WindowsListAsync",
       ["peeku_windows_focused"] = "WindowsFocusedAsync",
+      // Tool name keeps the windows_ group prefix, but the method is WindowFocusAsync (singular):
+      // it focuses ONE window, not the system "focused window" query that WindowsFocusedAsync returns.
+      ["peeku_windows_focus"]   = "WindowFocusAsync",
       ["peeku_uia_snapshot"]    = "UiaSnapshotAsync",
       ["peeku_element_get"]     = "ElementGetAsync",
       ["peeku_set_value"]       = "SetValueAsync",
@@ -165,7 +168,9 @@ public sealed class ToolParityTests
     // No required args.
     "peeku_windows_list"    => "{}",
     "peeku_windows_focused" => "{}",
+    "peeku_windows_focus"   => """{"target":"focused"}""",
     "peeku_hotkey"          => """{"keys":"ctrl+c"}""",
+    "peeku_press"           => """{"keys":["enter"]}""",
 
     // Require target (string shorthand "desktop" always valid).
     "peeku_capture_image"   => """{"target":"desktop"}""",
@@ -227,6 +232,9 @@ file sealed class ThrowingFakeClient : IPeekuClient
   public Task<FocusedWindowResult> WindowsFocusedAsync(CancellationToken ct = default)
     => Task.FromException<FocusedWindowResult>(new NotImplementedException(nameof(WindowsFocusedAsync)));
 
+  public Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default)
+    => Task.FromException<FocusedWindowResult>(new NotImplementedException(nameof(WindowFocusAsync)));
+
   public Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct = default)
     => Task.FromException<CaptureImageResult>(new NotImplementedException(nameof(CaptureImageAsync)));
 
@@ -259,6 +267,9 @@ file sealed class ThrowingFakeClient : IPeekuClient
 
   public Task<ActionResult> HotkeyAsync(HotkeyRequest req, CancellationToken ct = default)
     => Task.FromException<ActionResult>(new NotImplementedException(nameof(HotkeyAsync)));
+
+  public Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default)
+    => Task.FromException<ActionResult>(new NotImplementedException(nameof(PressAsync)));
 
   public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default)
     => ThrowAsyncEnumerable(ct);

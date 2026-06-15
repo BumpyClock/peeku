@@ -71,6 +71,12 @@ public sealed partial class DaemonPeekuClient
     }
   }
 
+  public Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default)
+  {
+    ThrowIfDisposed();
+    return WindowFocus.WindowFocusAsync(req, ct);
+  }
+
   public Task<CaptureImageResult> CaptureImageAsync(CaptureImageRequest req, CancellationToken ct = default)
     => CaptureImage.CaptureImageAsync(req, ct);
 }

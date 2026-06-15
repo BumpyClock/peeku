@@ -300,6 +300,30 @@ internal static class BatchRunner
           return (res.Ok, res, res.Error);
         }
 
+        case "peeku_press":
+        {
+          var keys = BatchArgs.ReadStringArray(args, "keys") ?? Array.Empty<string>();
+          var count = BatchArgs.ReadInt(args, "count") ?? 1;
+          var delayMs = BatchArgs.ReadInt(args, "delayMs");
+          var holdMs = BatchArgs.ReadInt(args, "holdMs");
+          var target = BatchArgs.TryReadTarget(args, out var pt, out _) ? pt : null;
+
+          var req = new PressRequest(keys, count, delayMs, holdMs, target);
+          var res = await client.PressAsync(req, ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_windows_focus":
+        {
+          if (!BatchArgs.TryReadTarget(args, out var target, out var targetError))
+          {
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+          }
+
+          var res = await client.WindowFocusAsync(new WindowFocusRequest(target), ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
         case "peeku_wait":
         {
           if (!BatchArgs.TryReadSelector(args, out var selector, out var selectorError))
