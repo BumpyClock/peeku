@@ -118,6 +118,10 @@ peeku uia snapshot --hwnd 0x000000000001047C --includeProperties all
 - `--depth <n>` (default 6)
 - `--maxNodes <n>` (default 5000)
 - `--includeProperties basic|all` (default basic)
+- element fields:
+  - `actions`: array of capability tokens (e.g., `invoke`, `toggle`, `value`, `expand`, `pick`, `scroll`, `read`, `grid`, `range`, plus always-present `focus`, `click`, `hover`); populated only when `--includeProperties all`
+  - `state`: object of current pattern state (keys like `toggleState`, `expandState`, `isSelected`, `rangeValue`, `value`); omitted if no state is present; populated only when `--includeProperties all`
+  - basic snapshots omit both fields (null) for lean output
 - tab strips: if `controlType: Tab` has no native UIA name, `name` may be populated as `tabs: ...` from descendant `TabItem` labels (`*` = selected)
 
 ### `see`
@@ -125,10 +129,12 @@ peeku uia snapshot --hwnd 0x000000000001047C --includeProperties all
 ```powershell
 peeku see --depth 2 --maxNodes 500
 peeku see --includeBase64
+peeku see --includeProperties all
 ```
 
 - same target + depth/maxNodes/includeProperties as `uia snapshot`
 - `--includeBase64`: include base64 PNG in response
+- element fields: same `actions` + `state` as `uia snapshot` when `--includeProperties all`
 
 ### `find`
 
@@ -141,7 +147,7 @@ peeku find --selector "window[name~=\"Notepad\"]/edit" --limit 5
 - `--limit <n>`: max matches (default 20)
 - target flags optional; if omitted, defaults to focused window
 
-### `element get`
+### `element get` (inspect)
 
 ```powershell
 peeku element get --ref uia:123:abc --snapshotId <id>
@@ -153,6 +159,8 @@ peeku element get --selector "window[name~=\"Notepad\"]/edit" --includePropertie
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - `--includeProperties basic|all` (default all)
 - target flags optional; if omitted, defaults to focused window
+- element fields in result: same `actions` + `state` as `uia snapshot` when `--includeProperties all`
+- error hints: when selector/element not found, `error.details` includes `candidates` array (up to 3 ranked "did you mean" elements) with shape `{ controlType, name, automationId, rect }`
 
 ### `click`
 
@@ -165,6 +173,7 @@ peeku click --ref uia:123:abc --method uia
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--method auto|uia|input` (default auto)
+- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `invoke`
 
@@ -175,6 +184,7 @@ peeku invoke --selector "window[name~=\"Notepad\"]/menuitem[name=\"File\"]"
 - `--ref <refId>` + optional `--snapshotId <id>` OR `--selector <expr>`
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
+- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `set-value`
 
@@ -190,6 +200,7 @@ peeku set-value --selector "window[name~=\"Notepad\"]/edit" --value "hello"
   - mismatch => `ok=false`
   - unsupported => `ok=true` + warning
 - includes `evidence` payload in result (operation/status/expected/actual/verification flags)
+- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `type`
 
@@ -206,6 +217,7 @@ peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello" --append f
   - mismatch => `ok=false`
   - unsupported => `ok=true` + warning
 - includes `evidence` payload in result (operation/status/expected/actual/verification flags)
+- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `scroll`
 
@@ -219,6 +231,7 @@ peeku scroll --selector "window[name~=\"Notepad\"]/edit" --lines -3 --direction 
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - exactly one of `--delta` or `--lines` is required
 - `--direction vertical|horizontal` (default vertical)
+- error hints: when selector/element not found, `error.details` includes `candidates` array (see Error envelope)
 
 ### `hotkey`
 
@@ -276,6 +289,29 @@ peeku batch --in ops.json --stop-on-error true
   { "tool": "peeku_click", "args": { "selector": { "expr": "window/edit" } } }
 ]
 ```
+
+## Error envelope
+
+All results include a `meta` object (traceId, timestamp, durationMs, optional warning) and optional `error` object:
+
+```json
+{
+  "ok": false,
+  "meta": { "traceId": "...", "timestamp": "...", "durationMs": 50 },
+  "error": {
+    "code": "ElementNotFound",
+    "message": "...",
+    "details": {
+      "candidates": [
+        { "controlType": "Edit", "name": "Search", "automationId": "SearchBox", "rect": { "x": 10, "y": 20, "width": 100, "height": 25 } }
+      ]
+    }
+  }
+}
+```
+
+- `error.details.candidates` (optional): ranked "did you mean" elements (up to 3) when `click`, `invoke`, `set-value`, `type`, `scroll`, or `element get` can't resolve the selector/element. Each candidate has `controlType`, `name`, `automationId`, `rect`.
+  - `find`'s zero-match behavior is unchanged: `ok=true` with empty `matches` array (no error envelope, no hints)
 
 ## Exit codes
 
