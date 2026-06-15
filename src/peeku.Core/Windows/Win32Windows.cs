@@ -7,6 +7,16 @@ namespace peeku;
 internal static class Win32Windows
 {
   internal static IReadOnlyList<WindowInfo> ListWindows(WindowsListRequest req, CancellationToken ct)
+    => ListWindows(req, processId: null, ct);
+
+  /// <summary>
+  /// Enumerates top-level windows. When <paramref name="processId"/> is set, the pid filter is
+  /// applied INSIDE the EnumWindows callback (before the Limit cap), so a busy desktop with many
+  /// other top-level windows can never push the target pid's windows past the cap and hide them.
+  /// That matters because the durable refId re-walk (ResolveRootsForPid) depends on always reaching
+  /// the target pid's real window. The unscoped overload keeps its existing cap-then-filter behavior.
+  /// </summary>
+  internal static IReadOnlyList<WindowInfo> ListWindows(WindowsListRequest req, int? processId, CancellationToken ct)
   {
     ct.ThrowIfCancellationRequested();
 
@@ -18,6 +28,7 @@ internal static class Win32Windows
     var windows = new List<WindowInfo>(capacity: Math.Clamp(req.Limit, 0, 256));
     var titleContains = string.IsNullOrWhiteSpace(req.TitleContains) ? null : req.TitleContains;
     var processName = string.IsNullOrWhiteSpace(req.ProcessName) ? null : req.ProcessName;
+    var pidFilter = processId is > 0 ? processId.Value : (int?)null;
     var cancelled = false;
     Exception? fatal = null;
 
@@ -29,6 +40,12 @@ internal static class Win32Windows
 
         var info = TryGetWindowInfo(hwnd);
         if (info is null)
+        {
+          return true;
+        }
+
+        // Pid filter runs before the limit so the target pid's windows are never starved by the cap.
+        if (pidFilter is not null && info.ProcessId != pidFilter.Value)
         {
           return true;
         }

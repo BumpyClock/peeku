@@ -17,7 +17,8 @@ public sealed class DaemonServerIntegrationTests
     var options = CreateJsonOptions();
     var codec = new JsonRpcCodec(options);
     var dispatcher = new JsonRpcDispatcher(options);
-    var connection = new JsonRpcConnection(codec, dispatcher, shutdown);
+    using var session = new DaemonSession();
+    var connection = new JsonRpcConnection(codec, dispatcher, session, shutdown);
     var server = new DaemonServer(pipeName, connection, shutdown);
 
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));

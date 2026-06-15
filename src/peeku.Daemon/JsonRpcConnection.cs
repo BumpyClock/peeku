@@ -5,7 +5,8 @@ namespace peeku.Daemon;
 /// </summary>
 /// <example>
 /// <code>
-/// var connection = new JsonRpcConnection(new JsonRpcCodec(new JsonSerializerOptions()), new JsonRpcDispatcher(new JsonSerializerOptions()), new DaemonShutdown());
+/// using var session = new DaemonSession();
+/// var connection = new JsonRpcConnection(new JsonRpcCodec(new JsonSerializerOptions()), new JsonRpcDispatcher(new JsonSerializerOptions()), session, new DaemonShutdown());
 /// await connection.ProcessAsync(new StringReader("{}"), new StringWriter(), CancellationToken.None);
 /// </code>
 /// </example>
@@ -13,12 +14,17 @@ public sealed class JsonRpcConnection
 {
   private readonly JsonRpcCodec _codec;
   private readonly JsonRpcDispatcher _dispatcher;
+  private readonly DaemonSession _session;
   private readonly DaemonShutdown _shutdown;
 
-  public JsonRpcConnection(JsonRpcCodec codec, JsonRpcDispatcher dispatcher, DaemonShutdown shutdown)
+  // The session is owned by the daemon entry point (Program.Main) and shared across every
+  // pipe connection for the process lifetime; this connection must NOT dispose it. See the
+  // invariant comment at the singleton creation site in Program.cs.
+  public JsonRpcConnection(JsonRpcCodec codec, JsonRpcDispatcher dispatcher, DaemonSession session, DaemonShutdown shutdown)
   {
     _codec = codec ?? throw new ArgumentNullException(nameof(codec));
     _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+    _session = session ?? throw new ArgumentNullException(nameof(session));
     _shutdown = shutdown ?? throw new ArgumentNullException(nameof(shutdown));
   }
 
@@ -33,8 +39,6 @@ public sealed class JsonRpcConnection
     {
       throw new ArgumentNullException(nameof(writer));
     }
-
-    using var session = new DaemonSession();
 
     while (!ct.IsCancellationRequested && !_shutdown.IsRequested)
     {
@@ -63,7 +67,7 @@ public sealed class JsonRpcConnection
       }
 
       var request = parsed.Request ?? throw new InvalidOperationException("Parsed request missing after successful parse");
-      var dispatch = await _dispatcher.DispatchAsync(request, session, ct).ConfigureAwait(false);
+      var dispatch = await _dispatcher.DispatchAsync(request, _session, ct).ConfigureAwait(false);
 
       if (!request.HasId)
       {

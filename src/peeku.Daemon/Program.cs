@@ -38,7 +38,23 @@ public sealed class Program
 
     var codec = new JsonRpcCodec(options);
     var dispatcher = new JsonRpcDispatcher(options);
-    var connection = new JsonRpcConnection(codec, dispatcher, shutdown);
+
+    // Singleton DaemonSession for the whole daemon process lifetime, shared across every pipe
+    // connection. This is what makes a `uia.snapshot` in one CLI process and a follow-up
+    // `set-value/click/element get --ref <refId>` in a SEPARATE CLI process resolve: both hit the
+    // SAME warm UIA3Automation + the SAME HandleIdCache instead of a fresh empty cache per command.
+    //
+    // INVARIANT (do not break): sharing one session — and reusing the AutomationElement COM refs
+    // it caches — is safe ONLY because (1) DaemonServer.RunAsync processes one connection at a time
+    // (serial while-loop, no fan-out) so connection B cannot start until A returns, AND
+    // (2) DaemonSession runs a single, process-lifetime MTA actor thread; every UIA touch marshals
+    // through session.ExecuteAsync, so cached COM refs are only ever touched on that one MTA thread
+    // and never cross apartments. A future concurrent server, a second actor thread, or switching
+    // the actor thread to STA would silently break this. Keep the server serial and the actor MTA,
+    // or add explicit synchronization around the cache and COM refs.
+    using var session = new DaemonSession();
+
+    var connection = new JsonRpcConnection(codec, dispatcher, session, shutdown);
     var server = new DaemonServer(pipeName, connection, shutdown);
 
     try

@@ -121,6 +121,28 @@ public sealed class HandleIdCache<T>
     return true;
   }
 
+  /// <summary>
+  /// Resolves a value by its durable stable key (e.g. a <c>uia:pid:hash</c> id) rather than the
+  /// internal <c>h:</c> handle. Routes through the same TTL/LRU touch as <see cref="TryGet"/> so an
+  /// access keeps the entry warm. Returns false when the key is unknown or the entry has expired.
+  /// </summary>
+  public bool TryGetByStableKey(string stableKey, out T value)
+  {
+    if (string.IsNullOrWhiteSpace(stableKey))
+    {
+      value = default!;
+      return false;
+    }
+
+    if (!_byStableKey.TryGetValue(stableKey.Trim(), out var handle))
+    {
+      value = default!;
+      return false;
+    }
+
+    return TryGet(handle, out value);
+  }
+
   public bool IsHandleId(string handleId)
   {
     if (handleId is null)

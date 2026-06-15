@@ -26,11 +26,22 @@ public sealed partial class DaemonPeekuClient
     if (hasElement)
     {
       var refId = element!.RefId.Trim();
+
+      // Fast path 1: ephemeral h: handle still live in this process's cache.
       if (_handles.TryGet(refId, out var cached))
       {
         return new ActionResolution(Ok: true, Element: cached);
       }
 
+      // Fast path 2: durable uia:pid:hash id whose element is still cached (indexed by stable key).
+      // This is the common cross-CLI-process case: a separate `snapshot` cached the element under
+      // the same warm daemon, so we hit the cache without re-walking.
+      if (_handles.TryGetByStableKey(refId, out var byKey))
+      {
+        return new ActionResolution(Ok: true, Element: byKey);
+      }
+
+      // An ephemeral h: id that missed both fast paths is gone for good (no durable recompute path).
       if (_handles.IsHandleId(refId))
       {
         return new ActionResolution(
@@ -38,20 +49,33 @@ public sealed partial class DaemonPeekuClient
           Error: PeekuErrors.Create(PeekuErrorCode.ElementNotFound, "Element handle not found.", new { refId }));
       }
 
-      var root = ResolveRoot(targetUsed, ct, out var rootWarning);
-      if (root is null)
+      // Durable uia: id, cache miss (TTL-expired / LRU-evicted / daemon-restarted): re-walk the live
+      // tree to recompute it. Scope the re-walk to the ref's pid when parseable to avoid a
+      // full-desktop walk (fallback cost ~= one snapshot of that pid's windows).
+      var rootWarning = default(string);
+      AutomationElement? found;
+      if (TryParseUiaPid(refId, out var refPid))
       {
-        var code = rootWarning is not null && rootWarning.Contains("not supported", StringComparison.OrdinalIgnoreCase)
-          ? PeekuErrorCode.NotSupported
-          : PeekuErrorCode.WindowNotFound;
+        found = FindByRefIdForPid(refPid, refId, ct, out rootWarning);
+      }
+      else
+      {
+        var root = ResolveRoot(targetUsed, ct, out rootWarning);
+        if (root is null)
+        {
+          var code = rootWarning is not null && rootWarning.Contains("not supported", StringComparison.OrdinalIgnoreCase)
+            ? PeekuErrorCode.NotSupported
+            : PeekuErrorCode.WindowNotFound;
 
-        return new ActionResolution(
-          Ok: false,
-          Error: PeekuErrors.Create(code, "Target window not found."),
-          Warning: rootWarning);
+          return new ActionResolution(
+            Ok: false,
+            Error: PeekuErrors.Create(code, "Target window not found.", new { refId }),
+            Warning: rootWarning);
+        }
+
+        found = FindByRefId(root, refId, maxNodes: 20_000, ct);
       }
 
-      var found = FindByRefId(root, refId, maxNodes: 20_000, ct);
       if (found is null)
       {
         return new ActionResolution(
@@ -123,7 +147,19 @@ public sealed partial class DaemonPeekuClient
       }
 
       var refId = matches[0].RefId;
-      if (!_handles.TryGet(refId, out var cached))
+
+      // The snapshot we just built cached every node via StoreHandle, indexing the durable id as the
+      // stable key. matches[0].RefId is now the durable uia: id (not h:), so a raw _handles.TryGet
+      // would return false; resolve by stable key, with a re-walk fallback for the rare miss.
+      if (_handles.TryGetByStableKey(refId, out var cached) || _handles.TryGet(refId, out cached))
+      {
+        return new ActionResolution(Ok: true, Element: cached, Warning: snapshot.Meta.Warning);
+      }
+
+      var rewalked = TryParseUiaPid(refId, out var snapPid)
+        ? FindByRefIdForPid(snapPid, refId, ct, out _)
+        : null;
+      if (rewalked is null)
       {
         return new ActionResolution(
           Ok: false,
@@ -131,7 +167,8 @@ public sealed partial class DaemonPeekuClient
           Warning: snapshot.Meta.Warning);
       }
 
-      return new ActionResolution(Ok: true, Element: cached, Warning: snapshot.Meta.Warning);
+      StoreHandle(rewalked);
+      return new ActionResolution(Ok: true, Element: rewalked, Warning: snapshot.Meta.Warning);
     }
 
     var liveRoot = ResolveRoot(targetUsed, ct, out var liveWarning);
@@ -285,6 +322,103 @@ public sealed partial class DaemonPeekuClient
 
     hwnd = unchecked((nint)value);
     return hwnd != 0;
+  }
+
+  /// <summary>
+  /// Parses the pid segment of a durable <c>uia:&lt;pid&gt;:&lt;hash&gt;</c> ref id (see UiaRefId.Create).
+  /// Returns false for ephemeral <c>h:</c> ids or any malformed value so callers fall back to the
+  /// target-scoped root instead of crashing.
+  /// </summary>
+  private static bool TryParseUiaPid(string refId, out int pid)
+  {
+    pid = 0;
+    if (string.IsNullOrWhiteSpace(refId))
+    {
+      return false;
+    }
+
+    var s = refId.Trim();
+    if (!s.StartsWith("uia:", StringComparison.Ordinal))
+    {
+      return false;
+    }
+
+    var rest = s.AsSpan(4);
+    var sep = rest.IndexOf(':');
+    if (sep <= 0)
+    {
+      return false;
+    }
+
+    return int.TryParse(rest[..sep], NumberStyles.None, CultureInfo.InvariantCulture, out pid) && pid > 0;
+  }
+
+  /// <summary>
+  /// Resolves the live UIA roots (top-level windows) owned by <paramref name="pid"/>, reusing
+  /// Win32 window enumeration filtered by process id. Spec calls this "ResolveRootForPid"; a pid can
+  /// own several top-level windows, so this returns all of them and the caller re-walks each.
+  /// </summary>
+  private IReadOnlyList<AutomationElement> ResolveRootsForPid(int pid, CancellationToken ct)
+  {
+    if (pid <= 0)
+    {
+      return Array.Empty<AutomationElement>();
+    }
+
+    // Filter by pid DURING enumeration (before the Limit cap), so other apps' top-level windows on a
+    // busy desktop can't push this pid's windows past the cap and cause a false ElementNotFound on the
+    // re-walk. Limit 256 is the effective ceiling here; a single pid owns far fewer top-level windows.
+    var windows = Win32Windows.ListWindows(
+      new WindowsListRequest(TitleContains: null, ProcessName: null, Limit: 256),
+      processId: pid,
+      ct);
+
+    var roots = new List<AutomationElement>(capacity: 4);
+    foreach (var w in windows)
+    {
+      if (!TryParseHwndHex(w.HwndHex, out var hwnd))
+      {
+        continue;
+      }
+
+      try
+      {
+        roots.Add(_automation.FromHandle(hwnd));
+      }
+      catch
+      {
+      }
+    }
+
+    return roots;
+  }
+
+  /// <summary>
+  /// Re-walks the live tree of every top-level window owned by <paramref name="pid"/> to recompute a
+  /// durable ref id (the fallback path when the cached handle is gone). Returns the first match, or
+  /// null when no window matched. Cost ~= one snapshot of that pid's windows.
+  /// </summary>
+  private AutomationElement? FindByRefIdForPid(int pid, string refId, CancellationToken ct, out string? warning)
+  {
+    warning = null;
+    var roots = ResolveRootsForPid(pid, ct);
+    if (roots.Count == 0)
+    {
+      warning = "Target window not found.";
+      return null;
+    }
+
+    foreach (var root in roots)
+    {
+      ct.ThrowIfCancellationRequested();
+      var found = FindByRefId(root, refId, maxNodes: 20_000, ct);
+      if (found is not null)
+      {
+        return found;
+      }
+    }
+
+    return null;
   }
 
   private readonly record struct ActionResolution(

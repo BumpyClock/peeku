@@ -259,9 +259,17 @@ public sealed partial class DaemonPeekuClient
         refId = req.Element!.RefId.Trim();
         snapshotId = req.Element!.SnapshotId?.Trim() ?? "";
 
+        // Fast path 1: ephemeral h: handle still live in this process's cache.
         if (_handles.TryGet(refId, out element))
         {
         }
+        // Fast path 2: durable uia:pid:hash id whose element is still cached (indexed by stable key).
+        // The common cross-CLI-process case under the same warm daemon: a separate `snapshot`
+        // cached the element, so we hit the cache without re-walking.
+        else if (_handles.TryGetByStableKey(refId, out element))
+        {
+        }
+        // An ephemeral h: id that missed both fast paths is gone for good (no durable recompute path).
         else if (_handles.IsHandleId(refId))
         {
           return new ElementGetResult(
@@ -275,24 +283,36 @@ public sealed partial class DaemonPeekuClient
         }
         else
         {
-          var root = ResolveRoot(targetUsed, ct, out var rootWarning);
-          if (root is null)
+          // Durable uia: id, cache miss: re-walk the live tree to recompute it, scoped to the ref's
+          // pid when parseable (avoids a full-desktop walk).
+          var rootWarning = default(string);
+          AutomationElement? found;
+          if (TryParseUiaPid(refId, out var refPid))
           {
-            var code = rootWarning is not null && rootWarning.Contains("not supported", StringComparison.OrdinalIgnoreCase)
-              ? PeekuErrorCode.NotSupported
-              : PeekuErrorCode.WindowNotFound;
+            found = FindByRefIdForPid(refPid, refId, ct, out rootWarning);
+          }
+          else
+          {
+            var root = ResolveRoot(targetUsed, ct, out rootWarning);
+            if (root is null)
+            {
+              var code = rootWarning is not null && rootWarning.Contains("not supported", StringComparison.OrdinalIgnoreCase)
+                ? PeekuErrorCode.NotSupported
+                : PeekuErrorCode.WindowNotFound;
 
-            return new ElementGetResult(
-              Ok: false,
-              Meta: scope.Meta(warning: rootWarning),
-              Element: new UiaElement(new ElementRef(refId, snapshotId)),
-              Properties: new Dictionary<string, object?>(),
-              Patterns: Array.Empty<string>(),
-              Rect: null,
-              Error: PeekuErrors.Create(code, "Target window not found."));
+              return new ElementGetResult(
+                Ok: false,
+                Meta: scope.Meta(warning: rootWarning),
+                Element: new UiaElement(new ElementRef(refId, snapshotId)),
+                Properties: new Dictionary<string, object?>(),
+                Patterns: Array.Empty<string>(),
+                Rect: null,
+                Error: PeekuErrors.Create(code, "Target window not found."));
+            }
+
+            found = FindByRefId(root, refId, maxNodes: 20_000, ct);
           }
 
-          var found = FindByRefId(root, refId, maxNodes: 20_000, ct);
           if (found is null)
           {
             return new ElementGetResult(
@@ -428,16 +448,29 @@ public sealed partial class DaemonPeekuClient
 
           refId = matches[0].RefId;
 
-          if (!_handles.TryGet(refId, out element))
+          // The snapshot we just built cached every node via StoreHandle, indexing the durable id as
+          // the stable key. matches[0].RefId is now the durable uia: id (not h:), so a raw
+          // _handles.TryGet returns false; resolve by stable key, with a re-walk fallback for the
+          // rare miss.
+          if (!_handles.TryGetByStableKey(refId, out element) && !_handles.TryGet(refId, out element))
           {
-            return new ElementGetResult(
-              Ok: false,
-              Meta: scope.Meta(warning: selectorWarning),
-              Element: new UiaElement(new ElementRef(refId, snapshotId)),
-              Properties: new Dictionary<string, object?>(),
-              Patterns: Array.Empty<string>(),
-              Rect: null,
-              Error: PeekuErrors.Create(PeekuErrorCode.ElementNotFound, "Element handle not available.", new { refId }));
+            var rewalked = TryParseUiaPid(refId, out var snapPid)
+              ? FindByRefIdForPid(snapPid, refId, ct, out _)
+              : null;
+            if (rewalked is null)
+            {
+              return new ElementGetResult(
+                Ok: false,
+                Meta: scope.Meta(warning: selectorWarning),
+                Element: new UiaElement(new ElementRef(refId, snapshotId)),
+                Properties: new Dictionary<string, object?>(),
+                Patterns: Array.Empty<string>(),
+                Rect: null,
+                Error: PeekuErrors.Create(PeekuErrorCode.ElementNotFound, "Element handle not available.", new { refId }));
+            }
+
+            element = rewalked;
+            StoreHandle(element);
           }
         }
       }
