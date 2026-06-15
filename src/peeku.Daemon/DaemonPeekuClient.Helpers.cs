@@ -137,12 +137,14 @@ public sealed partial class DaemonPeekuClient
 
       if (matches.Count == 0)
       {
+        var intent = CandidateHints.IntentFromSelector(selector.Expr);
+        var candidates = CandidateHints.Suggest(snapshot.Elements, intent);
         return new ActionResolution(
           Ok: false,
           Error: PeekuErrors.Create(
             PeekuErrorCode.ElementNotFound,
             "Selector did not match any elements.",
-            new { selector = selector.Expr }),
+            new { selector = selector.Expr, candidates }),
           Warning: snapshot.Meta.Warning);
       }
 
@@ -199,12 +201,14 @@ public sealed partial class DaemonPeekuClient
 
     if (liveMatches.Count == 0)
     {
+      var liveIntent = CandidateHints.IntentFromSelector(selector.Expr);
+      var liveCandidates = CollectLiveCandidates(liveRoot, liveIntent, maxVisited: 2000, maxCollect: 20, ct);
       return new ActionResolution(
         Ok: false,
         Error: PeekuErrors.Create(
           PeekuErrorCode.ElementNotFound,
           "Selector did not match any elements.",
-          new { selector = selector.Expr }),
+          new { selector = selector.Expr, candidates = liveCandidates }),
         Warning: liveWarning);
     }
 
@@ -426,4 +430,68 @@ public sealed partial class DaemonPeekuClient
     AutomationElement? Element = null,
     PeekuError? Error = null,
     string? Warning = null);
+
+  /// <summary>
+  /// Bounded BFS over the live UIA tree, collecting up to <paramref name="maxCollect"/> elements
+  /// (with name or automationId) for candidate-hint ranking. Visits at most
+  /// <paramref name="maxVisited"/> nodes to stay cheap on large trees.
+  /// </summary>
+  private static IReadOnlyList<CandidateHints.Candidate> CollectLiveCandidates(
+    AutomationElement root,
+    string? intent,
+    int maxVisited,
+    int maxCollect,
+    CancellationToken ct)
+  {
+    var pool = new List<UiaElement>(capacity: Math.Min(maxCollect * 4, 64));
+    var stack = new Stack<AutomationElement>(capacity: 64);
+    stack.Push(root);
+    var visited = 0;
+
+    while (stack.Count > 0 && visited < maxVisited)
+    {
+      ct.ThrowIfCancellationRequested();
+      var el = stack.Pop();
+      visited++;
+
+      string? name = null;
+      string? automationId = null;
+      string? controlType = null;
+      Rect? rect = null;
+
+      try { name = el.Name; } catch { }
+      try { automationId = el.AutomationId; } catch { }
+      try { controlType = el.ControlType.ToString(); } catch { }
+      try
+      {
+        var r = el.BoundingRectangle;
+        if (r.Width > 0 && r.Height > 0)
+        {
+          rect = new Rect(r.Left, r.Top, r.Width, r.Height);
+        }
+      }
+      catch { }
+
+      if (!string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(automationId))
+      {
+        pool.Add(new UiaElement(
+          Element: new ElementRef(""),
+          Rect: rect,
+          Name: string.IsNullOrWhiteSpace(name) ? null : name,
+          ControlType: string.IsNullOrWhiteSpace(controlType) ? null : controlType,
+          AutomationId: string.IsNullOrWhiteSpace(automationId) ? null : automationId));
+      }
+
+      AutomationElement[] children;
+      try { children = el.FindAllChildren(); }
+      catch { continue; }
+
+      for (var i = 0; i < children.Length; i++)
+      {
+        stack.Push(children[i]);
+      }
+    }
+
+    return CandidateHints.Suggest(pool, intent, maxCollect);
+  }
 }

@@ -107,6 +107,8 @@ public sealed partial class UiaClient
 
           if (matches.Count == 0)
           {
+            var cLiveIntent = CandidateHints.IntentFromSelector(req.Selector!.Expr);
+            var cLiveCandidates = CollectLiveCandidatesInProc(liveRoot, cLiveIntent, maxVisited: 2000, maxCollect: 20, ct);
             return new ElementGetResult(
               Ok: false,
               Meta: scope.Meta(warning: selectorWarning),
@@ -117,7 +119,7 @@ public sealed partial class UiaClient
               Error: PeekuErrors.Create(
                 PeekuErrorCode.ElementNotFound,
                 "Selector did not match any elements.",
-                new { selector = req.Selector!.Expr, target = targetUsed }));
+                new { selector = req.Selector!.Expr, target = targetUsed, candidates = cLiveCandidates }));
           }
 
           var match = matches[0];
@@ -185,6 +187,8 @@ public sealed partial class UiaClient
 
           if (matches.Count == 0)
           {
+            var cSnapIntent = CandidateHints.IntentFromSelector(req.Selector!.Expr);
+            var cSnapCandidates = CandidateHints.Suggest(snapshot.Elements, cSnapIntent);
             return new ElementGetResult(
               Ok: false,
               Meta: scope.Meta(warning: selectorWarning),
@@ -195,7 +199,7 @@ public sealed partial class UiaClient
               Error: PeekuErrors.Create(
                 PeekuErrorCode.ElementNotFound,
                 "Selector did not match any elements.",
-                new { selector = req.Selector!.Expr, target = targetUsed }));
+                new { selector = req.Selector!.Expr, target = targetUsed, candidates = cSnapCandidates }));
           }
 
           refId = matches[0].RefId;

@@ -373,6 +373,8 @@ public sealed partial class DaemonPeekuClient
 
           if (matches.Count == 0)
           {
+            var egLiveIntent = CandidateHints.IntentFromSelector(req.Selector!.Expr);
+            var egLiveCandidates = CollectLiveCandidates(root, egLiveIntent, maxVisited: 2000, maxCollect: 20, ct);
             return new ElementGetResult(
               Ok: false,
               Meta: scope.Meta(warning: selectorWarning),
@@ -383,7 +385,7 @@ public sealed partial class DaemonPeekuClient
               Error: PeekuErrors.Create(
                 PeekuErrorCode.ElementNotFound,
                 "Selector did not match any elements.",
-                new { selector = req.Selector!.Expr, target = targetUsed }));
+                new { selector = req.Selector!.Expr, target = targetUsed, candidates = egLiveCandidates }));
           }
 
           element = matches[0];
@@ -433,6 +435,8 @@ public sealed partial class DaemonPeekuClient
 
           if (matches.Count == 0)
           {
+            var egSnapIntent = CandidateHints.IntentFromSelector(req.Selector!.Expr);
+            var egSnapCandidates = CandidateHints.Suggest(snapshot.Elements, egSnapIntent);
             return new ElementGetResult(
               Ok: false,
               Meta: scope.Meta(warning: selectorWarning),
@@ -443,7 +447,7 @@ public sealed partial class DaemonPeekuClient
               Error: PeekuErrors.Create(
                 PeekuErrorCode.ElementNotFound,
                 "Selector did not match any elements.",
-                new { selector = req.Selector!.Expr, target = targetUsed }));
+                new { selector = req.Selector!.Expr, target = targetUsed, candidates = egSnapCandidates }));
           }
 
           refId = matches[0].RefId;

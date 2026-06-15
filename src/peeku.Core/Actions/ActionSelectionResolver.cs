@@ -79,12 +79,14 @@ internal static class ActionSelectionResolver
         var matches = UiaSelectors.Select(snapshot, selector!, limit: 1);
         if (matches.Count <= 0)
         {
+          var intent = CandidateHints.IntentFromSelector(selector!.Expr);
+          var candidates = CandidateHints.Suggest(snapshot.Elements, intent);
           return new Resolution(
             Ok: false,
             Error: PeekuErrors.Create(
               PeekuErrorCode.ElementNotFound,
               "Selector did not match any elements.",
-              new { selector = selector!.Expr }),
+              new { selector = selector!.Expr, candidates }),
             Warning: snapshot.Meta.Warning);
         }
 
@@ -192,12 +194,14 @@ internal static class ActionSelectionResolver
 
     if (match is null)
     {
+      var liveIntent = CandidateHints.IntentFromSelector(selector.Expr);
+      var liveCandidates = CollectLiveCandidates(root, liveIntent, maxVisited: 2000, maxCollect: 20, ct);
       return new Resolution(
         Ok: false,
         Error: PeekuErrors.Create(
           PeekuErrorCode.ElementNotFound,
           "Selector did not match any elements.",
-          new { selector = selector.Expr }),
+          new { selector = selector.Expr, candidates = liveCandidates }),
         Warning: rootWarning);
     }
 
@@ -410,5 +414,61 @@ internal static class ActionSelectionResolver
     {
       return null;
     }
+  }
+
+  /// <summary>
+  /// Bounded BFS over the live UIA tree, collecting up to <paramref name="maxCollect"/> elements
+  /// (with name or automationId) for candidate-hint ranking. Visits at most
+  /// <paramref name="maxVisited"/> nodes to stay cheap on large trees.
+  /// </summary>
+  private static IReadOnlyList<CandidateHints.Candidate> CollectLiveCandidates(
+    FlaUI.Core.AutomationElements.AutomationElement root,
+    string? intent,
+    int maxVisited,
+    int maxCollect,
+    CancellationToken ct)
+  {
+    var pool = new List<UiaElement>(capacity: Math.Min(maxCollect * 4, 64));
+    var stack = new Stack<FlaUI.Core.AutomationElements.AutomationElement>(capacity: 64);
+    stack.Push(root);
+    var visited = 0;
+
+    while (stack.Count > 0 && visited < maxVisited)
+    {
+      ct.ThrowIfCancellationRequested();
+      var el = stack.Pop();
+      visited++;
+
+      string? name = null;
+      string? automationId = null;
+      string? controlType = null;
+      Rect? rect = null;
+
+      try { name = el.Name; } catch { }
+      try { automationId = el.AutomationId; } catch { }
+      try { controlType = el.ControlType.ToString(); } catch { }
+      rect = ReadRect(el);
+
+      if (!string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(automationId))
+      {
+        pool.Add(new UiaElement(
+          Element: new ElementRef(""),
+          Rect: rect,
+          Name: string.IsNullOrWhiteSpace(name) ? null : name,
+          ControlType: string.IsNullOrWhiteSpace(controlType) ? null : controlType,
+          AutomationId: string.IsNullOrWhiteSpace(automationId) ? null : automationId));
+      }
+
+      FlaUI.Core.AutomationElements.AutomationElement[] children;
+      try { children = el.FindAllChildren(); }
+      catch { continue; }
+
+      for (var i = 0; i < children.Length; i++)
+      {
+        stack.Push(children[i]);
+      }
+    }
+
+    return CandidateHints.Suggest(pool, intent, maxCollect);
   }
 }
