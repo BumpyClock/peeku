@@ -114,7 +114,9 @@ public sealed partial class DaemonPeekuClient
       Name: ReadName(element, mode),
       ControlType: ReadControlType(element, mode),
       AutomationId: ReadAutomationId(element, mode),
-      ClassName: ReadClassName(element, mode));
+      ClassName: ReadClassName(element, mode),
+      Actions: mode == UiaPropertiesMode.All ? UiaActionTokens.Read(element) : null,
+      State: mode == UiaPropertiesMode.All ? UiaPatternState.Read(element) : null);
 
   private static UiaNode BuildNode(NodeBuilder node, string snapshotId)
     => new(

@@ -154,7 +154,9 @@ public record UiaElement(
   string? Name = null,
   string? ControlType = null,
   string? AutomationId = null,
-  string? ClassName = null);
+  string? ClassName = null,
+  IReadOnlyList<string>? Actions = null,
+  IReadOnlyDictionary<string, object?>? State = null);
 
 public record UiaSnapshotResult(
   bool Ok,
