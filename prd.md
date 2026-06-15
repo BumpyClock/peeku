@@ -569,10 +569,21 @@ This returns **either** a `resource_link` to a file and/or an MCP `"image"` cont
 {
   "type": "object",
   "properties": {
-    "target": { "description": "What to capture", "type": "object" },
-    "outPath": { "type": "string", "description": "Optional output path on disk" },
-    "includeBase64": { "type": "boolean", "default": false },
-    "imageFormat": { "type": "string", "enum": ["png"], "default": "png" }
+    "target": { "description": "What to capture", "oneOf": [
+      { "type": "string", "enum": ["desktop","focused_window","screen","window_hwnd","window_query"] },
+      { "type": "object", "properties": {
+          "kind": { "type": "string", "enum": ["desktop","focused_window","screen","window_hwnd","window_query"] },
+          "screenIndex": { "type": "integer" },
+          "hwndHex": { "type": "string" },
+          "query": { "type": "object", "properties": {
+              "titleContains": { "type": "string" },
+              "processName": { "type": "string" },
+              "processId": { "type": "integer" }
+          }}
+        }, "required": ["kind"] }
+    ]},
+    "out": { "type": "string", "description": "Optional output path on disk" },
+    "includeBase64": { "type": "boolean", "default": false }
   },
   "required": ["target"]
 }
@@ -901,9 +912,10 @@ Rules:
     "selector": { "type": "object" },
     "target": { "type": "object" },
     "direction": { "type": "string", "enum": ["vertical","horizontal"], "default": "vertical" },
-    "delta": { "type": "integer", "description": "Wheel delta, e.g. 120/-120" }
+    "delta": { "type": "integer", "description": "Wheel delta in notches, e.g. 120/-120; provide one of delta or lines" },
+    "lines": { "type": "integer", "description": "Number of lines to scroll; provide one of delta or lines" }
   },
-  "required": ["delta"]
+  "required": []
 }
 ```
 
@@ -995,9 +1007,7 @@ Because MCP tools are request/response, v1 should be a **bounded observation** t
   "properties": {
     "selector": { "type": "object" },
     "target": { "type": "object" },
-    "timeoutMs": { "type": "integer", "default": 10000 },
-    "pollMs": { "type": "integer", "default": 200 },
-    "returnSnapshot": { "type": "boolean", "default": false }
+    "timeoutMs": { "type": "integer", "default": 10000 }
   },
   "required": ["selector","target"]
 }
@@ -1012,8 +1022,7 @@ Because MCP tools are request/response, v1 should be a **bounded observation** t
     "ok": { "type": "boolean" },
     "traceId": { "type": "string" },
     "found": { "type": "boolean" },
-    "element": { "type": "object" },
-    "snapshotId": { "type": "string" }
+    "element": { "type": "object" }
   },
   "required": ["ok","traceId","found"]
 }
