@@ -222,15 +222,48 @@ internal static class BatchRunner
 
         case "peeku_click":
         {
-          var (selOk, element, selector, target, error) = BatchArgs.ReadSelection(args);
-          if (!selOk)
+          var x = BatchArgs.ReadInt(args, "x");
+          var y = BatchArgs.ReadInt(args, "y");
+          var hasCoords = x.HasValue && y.HasValue;
+
+          // When coords given, element/selector are optional (canvas escape hatch).
+          ElementRef? element = null;
+          Selector? selector = null;
+          Target? target = null;
+
+          if (hasCoords)
           {
-            return (false, null, error);
+            // Check if both coords AND selection were provided → InvalidArgument.
+            var hasElement = BatchArgs.TryReadElementRef(args, "elementRef", out var elemRef, out _);
+            var hasSelector = BatchArgs.TryReadSelector(args, out var selRef, out _);
+            if (hasElement || hasSelector)
+            {
+              return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument,
+                "Provide coordinates (x/y) OR an element/selector, not both."));
+            }
+
+            target = BatchArgs.TryReadTarget(args, out var t, out _) ? t : null;
+          }
+          else
+          {
+            var (selOk, elem, sel, tgt, error) = BatchArgs.ReadSelection(args);
+            if (!selOk)
+            {
+              return (false, null, error);
+            }
+
+            element = elem;
+            selector = sel;
+            target = tgt;
           }
 
           var method = BatchArgs.ReadActionMethod(args, "method") ?? ActionMethod.Auto;
           var foreground = BatchArgs.ReadBool(args, "foreground") ?? false;
-          var req = new ClickRequest(element, selector, target, method, foreground);
+          var globalCoords = BatchArgs.ReadBool(args, "globalCoords") ?? false;
+          var doubleClick = BatchArgs.ReadBool(args, "double") ?? false;
+          var right = BatchArgs.ReadBool(args, "right") ?? false;
+
+          var req = new ClickRequest(element, selector, target, method, foreground, x, y, globalCoords, doubleClick, right);
           var res = await client.ClickAsync(req, ct).ConfigureAwait(false);
           return (res.Ok, res, res.Error);
         }

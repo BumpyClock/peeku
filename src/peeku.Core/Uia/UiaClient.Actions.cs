@@ -31,6 +31,84 @@ public sealed partial class UiaClient
           Error: routeError);
       }
 
+      // Coords path: explicit X/Y given → skip element resolution entirely (canvas escape hatch).
+      var hasCoords = req.X.HasValue && req.Y.HasValue;
+      if (hasCoords)
+      {
+        // Validate: coords + selector both given is ambiguous.
+        if (req.Element is not null || req.Selector is not null)
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(),
+            MethodUsed: methodUsed,
+            Error: PeekuErrors.Create(
+              PeekuErrorCode.InvalidArgument,
+              "Provide coordinates (--x/--y) OR an element/selector, not both."));
+        }
+
+        // Resolve target window hwnd.
+        var coordTarget = req.Target;
+        var coordWindow = Win32Windows.ResolveTargetWindow(coordTarget ?? new Target.FocusedWindow(), ct);
+        var coordHwnd = coordWindow?.Hwnd ?? IntPtr.Zero;
+
+        int screenX, screenY;
+        if (req.GlobalCoords)
+        {
+          // Already screen-absolute physical pixels.
+          screenX = req.X!.Value;
+          screenY = req.Y!.Value;
+        }
+        else
+        {
+          // Window-relative: minimized guard first.
+          if (coordHwnd != IntPtr.Zero && Win32Windows.IsWindowMinimized(coordHwnd))
+          {
+            return new ActionResult(
+              Ok: false,
+              Meta: scope.Meta(),
+              MethodUsed: methodUsed,
+              Error: PeekuErrors.Create(
+                PeekuErrorCode.InvalidArgument,
+                "target window is minimized; restore it before window-relative coordinate click, or use --globalCoords"));
+          }
+
+          if (coordHwnd == IntPtr.Zero || !Win32Windows.GetWindowRect(coordHwnd, out var winRect))
+          {
+            return new ActionResult(
+              Ok: false,
+              Meta: scope.Meta(),
+              MethodUsed: methodUsed,
+              Error: PeekuErrors.Create(PeekuErrorCode.WindowNotFound, "Target window not found or GetWindowRect failed."));
+          }
+
+          screenX = winRect.Left + req.X!.Value;
+          screenY = winRect.Top  + req.Y!.Value;
+        }
+
+        var (coordClickOk, coordClickError, coordClickEvidence) = await SyntheticPointer.ClickAtPointAsync(
+          screenX, screenY, coordHwnd, req.Right, req.Double, ct).ConfigureAwait(false);
+
+        if (!coordClickOk)
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(),
+            MethodUsed: ActionMethod.Input,
+            Error: coordClickError);
+        }
+
+        var coordEvidenceJson = coordClickEvidence is not null
+          ? System.Text.Json.JsonSerializer.SerializeToElement(coordClickEvidence)
+          : (System.Text.Json.JsonElement?)null;
+
+        return new ActionResult(
+          Ok: true,
+          Meta: scope.Meta(),
+          MethodUsed: ActionMethod.Input,
+          Evidence: coordEvidenceJson);
+      }
+
       var resolved = await ActionSelectionResolver.ResolveAsync(UiaSnapshotAsync, ResolveRootWithWarning, req.Element, req.Selector, req.Target, ct).ConfigureAwait(false);
       if (!resolved.Ok || resolved.Selection is null)
       {
@@ -76,7 +154,7 @@ public sealed partial class UiaClient
         var uiaRect = inputElement.BoundingRectangle;
         var rect = new Rect(uiaRect.X, uiaRect.Y, uiaRect.Width, uiaRect.Height);
 
-        var (clickOk, clickError, clickEvidence) = await SyntheticPointer.ClickAsync(rect, targetHwnd, ct).ConfigureAwait(false);
+        var (clickOk, clickError, clickEvidence) = await SyntheticPointer.ClickAsync(rect, targetHwnd, req.Right, req.Double, ct).ConfigureAwait(false);
         if (!clickOk)
         {
           return new ActionResult(

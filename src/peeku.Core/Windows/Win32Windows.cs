@@ -371,4 +371,23 @@ internal static class Win32Windows
 
   [DllImport("kernel32.dll")]
   private static extern uint GetCurrentThreadId();
+
+  [DllImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  internal static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+  [StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+  internal struct RECT
+  {
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+  }
+
+  /// <summary>
+  /// Returns whether <paramref name="hwnd"/> is minimized (iconic).
+  /// Public wrapper for use outside the class.
+  /// </summary>
+  internal static bool IsWindowMinimized(IntPtr hwnd) => IsIconic(hwnd);
 }

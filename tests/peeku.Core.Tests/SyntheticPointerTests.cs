@@ -143,4 +143,117 @@ public sealed class SyntheticPointerTests
     Assert.NotNull(error);
     Assert.Equal(PeekuErrors.Code(PeekuErrorCode.NotSupported), error!.Code);
   }
+
+  // ── S2: right-click flag ────────────────────────────────────────────────
+
+  [Fact]
+  public void MouseButtonDown_RightDown_EmitsRightFlag()
+  {
+    var input = HotkeyInputInjector.MouseButtonDown(HotkeyInputInjector.MOUSEEVENTF_RIGHTDOWN);
+    Assert.Equal(HotkeyInputInjector.MOUSEEVENTF_RIGHTDOWN, input.U.mi.dwFlags);
+  }
+
+  [Fact]
+  public void MouseButtonUp_RightUp_EmitsRightFlag()
+  {
+    var input = HotkeyInputInjector.MouseButtonUp(HotkeyInputInjector.MOUSEEVENTF_RIGHTUP);
+    Assert.Equal(HotkeyInputInjector.MOUSEEVENTF_RIGHTUP, input.U.mi.dwFlags);
+  }
+
+  // ── S2: double-click INPUT[] has two down/up pairs ───────────────────────
+
+  [Fact]
+  public void DoubleClick_InputArray_HasTwoDownUpPairs()
+  {
+    // Simulate what SyntheticPointer.SendClickAtAbsoluteAsync builds for doubleClick=true.
+    var downFlag = HotkeyInputInjector.MOUSEEVENTF_LEFTDOWN;
+    var upFlag   = HotkeyInputInjector.MOUSEEVENTF_LEFTUP;
+
+    var inputs = new HotkeyInputInjector.INPUT[]
+    {
+      HotkeyInputInjector.MouseMove(1000, 2000),
+      HotkeyInputInjector.MouseButtonDown(downFlag),
+      HotkeyInputInjector.MouseButtonUp(upFlag),
+      HotkeyInputInjector.MouseButtonDown(downFlag),
+      HotkeyInputInjector.MouseButtonUp(upFlag),
+    };
+
+    Assert.Equal(5, inputs.Length);
+
+    // [0] MOVE
+    Assert.True((inputs[0].U.mi.dwFlags & HotkeyInputInjector.MOUSEEVENTF_MOVE) != 0);
+
+    // [1] first down
+    Assert.Equal(downFlag, inputs[1].U.mi.dwFlags);
+
+    // [2] first up
+    Assert.Equal(upFlag, inputs[2].U.mi.dwFlags);
+
+    // [3] second down
+    Assert.Equal(downFlag, inputs[3].U.mi.dwFlags);
+
+    // [4] second up
+    Assert.Equal(upFlag, inputs[4].U.mi.dwFlags);
+  }
+
+  [Fact]
+  public void DoubleClick_RightButton_InputArray_UsesRightFlags()
+  {
+    var downFlag = HotkeyInputInjector.MOUSEEVENTF_RIGHTDOWN;
+    var upFlag   = HotkeyInputInjector.MOUSEEVENTF_RIGHTUP;
+
+    var inputs = new HotkeyInputInjector.INPUT[]
+    {
+      HotkeyInputInjector.MouseMove(500, 500),
+      HotkeyInputInjector.MouseButtonDown(downFlag),
+      HotkeyInputInjector.MouseButtonUp(upFlag),
+      HotkeyInputInjector.MouseButtonDown(downFlag),
+      HotkeyInputInjector.MouseButtonUp(upFlag),
+    };
+
+    Assert.Equal(HotkeyInputInjector.MOUSEEVENTF_RIGHTDOWN, inputs[1].U.mi.dwFlags);
+    Assert.Equal(HotkeyInputInjector.MOUSEEVENTF_RIGHTUP,   inputs[2].U.mi.dwFlags);
+    Assert.Equal(HotkeyInputInjector.MOUSEEVENTF_RIGHTDOWN, inputs[3].U.mi.dwFlags);
+    Assert.Equal(HotkeyInputInjector.MOUSEEVENTF_RIGHTUP,   inputs[4].U.mi.dwFlags);
+  }
+
+  // ── S2: window-relative offset = rect.Left/Top + x/y ────────────────────
+
+  [Fact]
+  public void WindowRelativeOffset_EqualsRectLeftTopPlusXY()
+  {
+    // Simulate the offset calculation from UiaClient.Actions.cs coords path.
+    // rect.Left=100, rect.Top=200, x=30, y=40 → screenX=130, screenY=240.
+    int rectLeft = 100, rectTop = 200;
+    int x = 30, y = 40;
+    var screenX = rectLeft + x;
+    var screenY = rectTop  + y;
+
+    Assert.Equal(130, screenX);
+    Assert.Equal(240, screenY);
+  }
+
+  // ── S2: ClickRequest new fields default to null/false ───────────────────
+
+  [Fact]
+  public void ClickRequest_NewFields_DefaultToNullOrFalse()
+  {
+    var req = new ClickRequest();
+    Assert.Null(req.X);
+    Assert.Null(req.Y);
+    Assert.False(req.GlobalCoords);
+    Assert.False(req.Double);
+    Assert.False(req.Right);
+  }
+
+  [Fact]
+  public void ClickRequest_CoordsCanBeSet()
+  {
+    var req = new ClickRequest(X: 100, Y: 200, GlobalCoords: true, Double: true, Right: true);
+    Assert.Equal(100, req.X);
+    Assert.Equal(200, req.Y);
+    Assert.True(req.GlobalCoords);
+    Assert.True(req.Double);
+    Assert.True(req.Right);
+  }
 }

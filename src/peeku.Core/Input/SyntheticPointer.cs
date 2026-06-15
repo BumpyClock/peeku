@@ -10,7 +10,7 @@ namespace peeku;
 ///   <item>Captures prior foreground window via <see cref="WindowFocusScope"/>.</item>
 ///   <item>Brings <paramref name="targetHwnd"/> to foreground with the hardened dance.</item>
 ///   <item>Settles 50 ms so focus lands inside the window.</item>
-///   <item>Sends move → button-down → button-up as one <c>INPUT[]</c>.</item>
+///   <item>Sends move → button-down → button-up as one <c>INPUT[]</c> (double = two down/up pairs).</item>
 ///   <item>Disposes scope (restores prior foreground), whether click succeeded or not.</item>
 /// </list>
 /// </summary>
@@ -24,9 +24,22 @@ internal static class SyntheticPointer
   /// Performs a left-click at the centre of <paramref name="rect"/> in a <c>WindowFocusScope</c>.
   /// Returns a completed <see cref="ActionResult"/>; never throws.
   /// </summary>
+  internal static Task<(bool Ok, PeekuError? Error, object? Evidence)> ClickAsync(
+    Rect rect,
+    IntPtr targetHwnd,
+    CancellationToken ct)
+    => ClickAsync(rect, targetHwnd, right: false, doubleClick: false, ct);
+
+  /// <summary>
+  /// Performs a synthetic click at the centre of <paramref name="rect"/>.
+  /// <paramref name="right"/> selects right-button; <paramref name="doubleClick"/> sends two down/up
+  /// pairs in a single <c>INPUT[]</c> (time=0, within <c>GetDoubleClickTime()</c>, no sleep needed).
+  /// </summary>
   internal static async Task<(bool Ok, PeekuError? Error, object? Evidence)> ClickAsync(
     Rect rect,
     IntPtr targetHwnd,
+    bool right,
+    bool doubleClick,
     CancellationToken ct)
   {
     // Guard: zero or degenerate rect must fail before any SendInput.
@@ -42,14 +55,59 @@ internal static class SyntheticPointer
     var cx = (int)Math.Round(rect.X + rect.Width  / 2.0);
     var cy = (int)Math.Round(rect.Y + rect.Height / 2.0);
 
-    var (ax, ay) = Win32Screen.ToAbsolute(cx, cy);
+    return await SendClickAtAbsoluteAsync(cx, cy, targetHwnd, right, doubleClick, ct).ConfigureAwait(false);
+  }
 
-    var inputs = new[]
+  /// <summary>
+  /// Performs a synthetic click at explicit screen-absolute physical pixel coordinates.
+  /// Skips element resolution entirely — the canvas escape hatch.
+  /// </summary>
+  internal static Task<(bool Ok, PeekuError? Error, object? Evidence)> ClickAtPointAsync(
+    int screenX,
+    int screenY,
+    IntPtr targetHwnd,
+    bool right,
+    bool doubleClick,
+    CancellationToken ct)
+    => SendClickAtAbsoluteAsync(screenX, screenY, targetHwnd, right, doubleClick, ct);
+
+  private static async Task<(bool Ok, PeekuError? Error, object? Evidence)> SendClickAtAbsoluteAsync(
+    int screenX,
+    int screenY,
+    IntPtr targetHwnd,
+    bool right,
+    bool doubleClick,
+    CancellationToken ct)
+  {
+    var (ax, ay) = Win32Screen.ToAbsolute(screenX, screenY);
+
+    var downFlag = right ? HotkeyInputInjector.MOUSEEVENTF_RIGHTDOWN : HotkeyInputInjector.MOUSEEVENTF_LEFTDOWN;
+    var upFlag   = right ? HotkeyInputInjector.MOUSEEVENTF_RIGHTUP   : HotkeyInputInjector.MOUSEEVENTF_LEFTUP;
+
+    HotkeyInputInjector.INPUT[] inputs;
+    if (doubleClick)
     {
-      HotkeyInputInjector.MouseMove(ax, ay),
-      HotkeyInputInjector.MouseButtonDown(HotkeyInputInjector.MOUSEEVENTF_LEFTDOWN),
-      HotkeyInputInjector.MouseButtonUp(HotkeyInputInjector.MOUSEEVENTF_LEFTUP),
-    };
+      // Two down/up pairs in ONE INPUT[]; time=0 on all events keeps inter-event gap
+      // within GetDoubleClickTime() — the OS double-click detector fires on the second
+      // button-down when the interval between them is below the system threshold.
+      inputs =
+      [
+        HotkeyInputInjector.MouseMove(ax, ay),
+        HotkeyInputInjector.MouseButtonDown(downFlag),
+        HotkeyInputInjector.MouseButtonUp(upFlag),
+        HotkeyInputInjector.MouseButtonDown(downFlag),
+        HotkeyInputInjector.MouseButtonUp(upFlag),
+      ];
+    }
+    else
+    {
+      inputs =
+      [
+        HotkeyInputInjector.MouseMove(ax, ay),
+        HotkeyInputInjector.MouseButtonDown(downFlag),
+        HotkeyInputInjector.MouseButtonUp(upFlag),
+      ];
+    }
 
     using var focusScope = new WindowFocusScope();
 

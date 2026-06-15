@@ -40,17 +40,51 @@ internal static class CliActionCommands
     var foregroundOpt = new Option<bool>("--foreground") { Description = "Use SendInput synthetic mouse click (steals + restores foreground)" };
     foregroundOpt.DefaultValueFactory = _ => false;
 
+    var xOpt = new Option<int?>("--x") { Description = "Window-relative X coordinate (physical pixels); use with --y" };
+    var yOpt = new Option<int?>("--y") { Description = "Window-relative Y coordinate (physical pixels); use with --x" };
+    var globalCoordsOpt = new Option<bool>("--globalCoords") { Description = "Treat --x/--y as screen-absolute physical pixels (skip window offset)" };
+    globalCoordsOpt.DefaultValueFactory = _ => false;
+    var doubleOpt = new Option<bool>("--double") { Description = "Double-click (two down/up pairs in one SendInput batch)" };
+    doubleOpt.DefaultValueFactory = _ => false;
+    var rightOpt = new Option<bool>("--right") { Description = "Right-button click instead of left" };
+    rightOpt.DefaultValueFactory = _ => false;
+
     cmd.Add(methodOpt);
     cmd.Add(foregroundOpt);
+    cmd.Add(xOpt);
+    cmd.Add(yOpt);
+    cmd.Add(globalCoordsOpt);
+    cmd.Add(doubleOpt);
+    cmd.Add(rightOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
       using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
+      var xVal = parse.GetValue(xOpt);
+      var yVal = parse.GetValue(yOpt);
+      var hasCoords = xVal.HasValue && yVal.HasValue;
+
+      // Exactly-one-of {coords, element/selector}: both → InvalidArgument.
+      var hasXY = xVal.HasValue || yVal.HasValue;
       if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
         return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectionError ?? "Invalid selection."));
+      }
+
+      var hasSelection = elementRef is not null || selector is not null;
+      if (hasCoords && hasSelection)
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument,
+          "Provide coordinates (--x/--y) OR an element/selector, not both."));
+      }
+
+      // --x without --y (or vice versa) is not useful.
+      if (xVal.HasValue != yVal.HasValue)
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument,
+          "Provide both --x and --y together."));
       }
 
       if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
@@ -87,7 +121,12 @@ internal static class CliActionCommands
         Selector: selector,
         Target: target,
         Method: method,
-        Foreground: foreground), scope.Token).ConfigureAwait(false);
+        Foreground: foreground,
+        X: xVal,
+        Y: yVal,
+        GlobalCoords: parse.GetValue(globalCoordsOpt),
+        Double: parse.GetValue(doubleOpt),
+        Right: parse.GetValue(rightOpt)), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
       return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);

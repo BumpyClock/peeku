@@ -229,7 +229,12 @@ public record ClickRequest(
   Selector? Selector = null,
   Target? Target = null,
   ActionMethod Method = ActionMethod.Auto,
-  bool Foreground = false);
+  bool Foreground = false,
+  int? X = null,
+  int? Y = null,
+  bool GlobalCoords = false,
+  bool Double = false,
+  bool Right = false);
 
 public record InvokeRequest(
   ElementRef? Element = null,
