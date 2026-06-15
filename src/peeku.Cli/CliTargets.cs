@@ -11,7 +11,9 @@ internal sealed record CliTargetOptions(
   Option<string?> Hwnd,
   Option<string?> TitleContains,
   Option<string?> ProcessName,
-  Option<int?> ProcessId);
+  Option<int?> ProcessId,
+  Option<string?> App,
+  Option<int?> Pid);
 
 internal static class CliTargets
 {
@@ -43,6 +45,8 @@ internal static class CliTargets
     var titleContains = new Option<string?>("--titleContains") { Description = "Query: window title contains" };
     var processName = new Option<string?>("--processName") { Description = "Query: process name" };
     var processId = new Option<int?>("--processId") { Description = "Query: process id" };
+    var app = new Option<string?>("--app") { Description = "Target window by process name (alias of --processName)" };
+    var pid = new Option<int?>("--pid") { Description = "Target window by process id (alias of --processId)" };
 
     cmd.Add(focused);
     cmd.Add(desktop);
@@ -54,6 +58,8 @@ internal static class CliTargets
       cmd.Add(titleContains);
       cmd.Add(processName);
       cmd.Add(processId);
+      cmd.Add(app);
+      cmd.Add(pid);
     }
 
     return new CliTargetOptions(
@@ -63,17 +69,40 @@ internal static class CliTargets
       Hwnd: hwnd,
       TitleContains: titleContains,
       ProcessName: processName,
-      ProcessId: processId);
+      ProcessId: processId,
+      App: app,
+      Pid: pid);
   }
 
-  internal static Target ParseOrDefaultFocused(ParseResult parse, CliTargetOptions o)
-    => Parse(parse, o, defaultFocused: true) ?? Target.Focused();
-
-  internal static Target? ParseOptional(ParseResult parse, CliTargetOptions o)
-    => Parse(parse, o, defaultFocused: false);
-
-  private static Target? Parse(ParseResult parse, CliTargetOptions o, bool defaultFocused)
+  /// <summary>
+  /// Resolves the target, defaulting to the focused window when no target flags are given.
+  /// Returns false (with <paramref name="error"/> set) on a multi-target conflict so callers
+  /// can emit a clean validation envelope instead of throwing.
+  /// </summary>
+  internal static bool TryParseOrDefaultFocused(ParseResult parse, CliTargetOptions o, out Target target, out string? error)
   {
+    if (!TryParse(parse, o, defaultFocused: true, out var t, out error))
+    {
+      target = Target.Focused();
+      return false;
+    }
+
+    target = t ?? Target.Focused();
+    return true;
+  }
+
+  /// <summary>
+  /// Resolves an optional target (null when no target flags are given).
+  /// Returns false (with <paramref name="error"/> set) on a multi-target conflict.
+  /// </summary>
+  internal static bool TryParseOptional(ParseResult parse, CliTargetOptions o, out Target? target, out string? error)
+    => TryParse(parse, o, defaultFocused: false, out target, out error);
+
+  private static bool TryParse(ParseResult parse, CliTargetOptions o, bool defaultFocused, out Target? target, out string? error)
+  {
+    target = null;
+    error = null;
+
     var focused = parse.GetValue(o.Focused);
     var desktop = parse.GetValue(o.Desktop);
     var screenIndex = parse.GetValue(o.ScreenIndex);
@@ -82,8 +111,14 @@ internal static class CliTargets
     var titleContains = parse.GetValue(o.TitleContains);
     var processName = parse.GetValue(o.ProcessName);
     var processId = parse.GetValue(o.ProcessId);
+    var app = parse.GetValue(o.App);
+    var pid = parse.GetValue(o.Pid);
 
-    var hasQuery = !string.IsNullOrWhiteSpace(titleContains) || !string.IsNullOrWhiteSpace(processName) || processId is not null;
+    // --app is an alias of --processName; --pid an alias of --processId. Fold them in.
+    var effectiveProcessName = !string.IsNullOrWhiteSpace(processName) ? processName : app;
+    var effectiveProcessId = processId ?? pid;
+
+    var hasQuery = !string.IsNullOrWhiteSpace(titleContains) || !string.IsNullOrWhiteSpace(effectiveProcessName) || effectiveProcessId is not null;
 
     var count = 0;
     if (focused) count++;
@@ -94,28 +129,32 @@ internal static class CliTargets
 
     if (count == 0)
     {
-      return defaultFocused ? Target.Focused() : null;
+      target = defaultFocused ? Target.Focused() : null;
+      return true;
     }
 
     if (count > 1)
     {
-      throw new ArgumentException("Provide exactly one target: --focused|--desktop|--screenIndex|--hwnd|query options.");
+      error = "Provide exactly one target: --focused|--desktop|--screenIndex|--hwnd|query options.";
+      return false;
     }
 
-    if (focused) return Target.Focused();
-    if (desktop) return new Target.Desktop();
-    if (screenIndex is not null) return new Target.Screen(screenIndex.Value);
+    if (focused) { target = Target.Focused(); return true; }
+    if (desktop) { target = new Target.Desktop(); return true; }
+    if (screenIndex is not null) { target = new Target.Screen(screenIndex.Value); return true; }
 
     if (!string.IsNullOrWhiteSpace(hwndRaw))
     {
       var normalized = Win32WindowState.TryNormalizeHwndHex(hwndRaw!, out var n) ? n : hwndRaw!.Trim();
-      return new Target.WindowByHwnd(normalized);
+      target = new Target.WindowByHwnd(normalized);
+      return true;
     }
 
-    return new Target.WindowByQuery(new WindowQuery(
+    target = new Target.WindowByQuery(new WindowQuery(
       TitleContains: string.IsNullOrWhiteSpace(titleContains) ? null : titleContains!.Trim(),
-      ProcessName: string.IsNullOrWhiteSpace(processName) ? null : processName!.Trim(),
-      ProcessId: processId));
+      ProcessName: string.IsNullOrWhiteSpace(effectiveProcessName) ? null : effectiveProcessName!.Trim(),
+      ProcessId: effectiveProcessId));
+    return true;
   }
 }
 

@@ -99,6 +99,16 @@ public sealed class JsonRpcDispatcher
 
   private static string ResolveBuildVersion()
   {
+    // Prefer AssemblyInformationalVersion (e.g. 0.1.0+sha) so the daemon self-report and the
+    // CLI marker stamp agree. Fall back to the assembly version. (cli-refinement-plan.md §6)
+    var info = Assembly.GetExecutingAssembly()
+      .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+      ?.InformationalVersion;
+    if (!string.IsNullOrWhiteSpace(info))
+    {
+      return info.Trim();
+    }
+
     var version = Assembly.GetExecutingAssembly().GetName().Version;
     var text = version?.ToString() ?? "";
     return string.IsNullOrWhiteSpace(text) ? "0.0.0" : text;

@@ -49,7 +49,11 @@ internal static class CliFlowCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      var target = CliTargets.ParseOrDefaultFocused(parse, targetOpts);
+      if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
+
       var req = new ObserveRequest(
         Target: target,
         Events: ParseEvents(parse.GetValue(eventsOpt)),
@@ -83,31 +87,44 @@ internal static class CliFlowCommands
     var cmd = new Command("wait", "Wait for selector to match");
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
 
-    var selectorOpt = new Option<string>("--selector") { Description = "Selector expression" };
-    selectorOpt.Required = true;
+    // --selector is no longer Required: the positional query is an accepted alternative.
+    var selectorOpt = new Option<string?>("--selector") { Description = "Selector expression" };
+
+    var queryArg = new Argument<string?>("query")
+    {
+      Description = "Selector expression (positional shorthand for --selector)",
+      Arity = ArgumentArity.ZeroOrOne,
+    };
 
     var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation (event-driven) for selector" };
     liveOpt.DefaultValueFactory = _ => false;
 
     cmd.Add(selectorOpt);
+    cmd.Add(queryArg);
     cmd.Add(liveOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
 
-      var selectorRaw = parse.GetValue(selectorOpt) ?? "";
-      var selector = new Selector(selectorRaw.Trim(), PreferCachedSnapshot: !parse.GetValue(liveOpt));
-      var target = CliTargets.ParseOrDefaultFocused(parse, targetOpts);
+      if (!CliSelection.TryParseSelectorOnly(parse, selectorOpt, queryArg, liveOpt, out var selector, out var selectorError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectorError ?? "Invalid selector."));
+      }
+
+      if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
 
       var client = CliPeekuClient.CreateDefault();
       var res = await client.WaitAsync(new WaitRequest(
-        Selector: selector,
+        Selector: selector!,
         Target: target,
         Timeout: ctx.Timeout), ct).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -115,10 +132,17 @@ internal static class CliFlowCommands
 
   private static Command CreateBatchCommand()
   {
-    var cmd = new Command("batch", "Run a batch of operations from a JSON file");
+    var cmd = new Command("batch", "Run a batch of operations from a JSON file or stdin");
 
-    var inOpt = new Option<string>("--in") { Description = "Path to JSON ops array" };
-    inOpt.Required = true;
+    // --in is optional: absent or "-" reads the ops array from redirected stdin.
+    var inOpt = new Option<string?>("--in") { Description = "Path to JSON ops array, or '-' for stdin" };
+
+    // Positional source: accepts a path or "-" so `cat ops.json | peeku batch -` parses.
+    var sourceArg = new Argument<string?>("source")
+    {
+      Description = "Path to JSON ops array, or '-' for stdin (positional alternative to --in)",
+      Arity = ArgumentArity.ZeroOrOne,
+    };
 
     var stopOnErrorOpt = new Option<string>("--stop-on-error") { Description = "true|false" };
     stopOnErrorOpt.DefaultValueFactory = _ => "true";
@@ -133,6 +157,7 @@ internal static class CliFlowCommands
     });
 
     cmd.Add(inOpt);
+    cmd.Add(sourceArg);
     cmd.Add(stopOnErrorOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
@@ -140,48 +165,55 @@ internal static class CliFlowCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      var path = parse.GetValue(inOpt) ?? "";
-      if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+      // --in wins; else the positional source. Both accept a path or "-".
+      var inFlag = parse.GetValue(inOpt);
+      var path = !string.IsNullOrWhiteSpace(inFlag) ? inFlag : parse.GetValue(sourceArg);
+
+      // Resolve the JSON source: stdin (absent/"-") or a file path.
+      string json;
+      string sourcePath; // used in error envelopes for coherence
+      if (string.IsNullOrWhiteSpace(path) || string.Equals(path.Trim(), "-", StringComparison.Ordinal))
       {
-        CliOutput.Write(new
+        if (!Console.IsInputRedirected)
         {
-          ok = false,
-          meta = new { traceId = ctx.TraceId },
-          error = new { code = "InvalidArgument", message = "Input file not found.", details = new { path } },
-          traceId = ctx.TraceId,
-        }, ctx.Format);
-        return 1;
+          return CliErrors.Write(ctx, PeekuErrors.Create(
+            PeekuErrorCode.InvalidArgument,
+            "provide ops via --in <path> or pipe JSON to stdin"));
+        }
+
+        json = Console.In.ReadToEnd();
+        sourcePath = "<stdin>";
+      }
+      else if (!File.Exists(path))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(
+          PeekuErrorCode.InvalidArgument, "Input file not found.", new { path }));
+      }
+      else
+      {
+        json = File.ReadAllText(path);
+        sourcePath = path;
       }
 
       JsonDocument doc;
       try
       {
-        doc = JsonDocument.Parse(File.ReadAllText(path));
+        doc = JsonDocument.Parse(json);
       }
       catch (Exception ex)
       {
-        CliOutput.Write(new
-        {
-          ok = false,
-          meta = new { traceId = ctx.TraceId },
-          error = new { code = "InvalidArgument", message = "Failed to parse JSON.", details = new { path, exception = ex.GetType().FullName, ex.Message } },
-          traceId = ctx.TraceId,
-        }, ctx.Format);
-        return 1;
+        return CliErrors.Write(ctx, PeekuErrors.Create(
+          PeekuErrorCode.InvalidArgument,
+          "Failed to parse JSON.",
+          new { path = sourcePath, exception = ex.GetType().FullName, ex.Message }));
       }
 
       using (doc)
       {
         if (doc.RootElement.ValueKind != JsonValueKind.Array)
         {
-          CliOutput.Write(new
-          {
-            ok = false,
-            meta = new { traceId = ctx.TraceId },
-            error = new { code = "InvalidArgument", message = "Batch input must be a JSON array.", details = new { path } },
-            traceId = ctx.TraceId,
-          }, ctx.Format);
-          return 1;
+          return CliErrors.Write(ctx, PeekuErrors.Create(
+            PeekuErrorCode.InvalidArgument, "Batch input must be a JSON array.", new { path = sourcePath }));
         }
 
         var emptyArgs = JsonDocument.Parse("{}").RootElement.Clone();
@@ -217,7 +249,7 @@ internal static class CliFlowCommands
           StopOnError: stopOnError), cts.Token).ConfigureAwait(false);
 
         CliOutput.Write(res, ctx.Format);
-        return res.Ok ? 0 : 1;
+        return res.Ok ? 0 : ExitCodes.For(res.Error);
       }
     });
 
@@ -229,8 +261,19 @@ internal static class CliFlowCommands
     var cmd = new Command("watch", "Stream live selector updates as JSONL (daemon only)");
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
 
-    var selectorOpt = new Option<string>("--selector") { Description = "Selector expression" };
-    selectorOpt.Required = true;
+    // --selector is no longer Required: the positional query is an accepted alternative.
+    var selectorOpt = new Option<string?>("--selector") { Description = "Selector expression" };
+
+    var queryArg = new Argument<string?>("query")
+    {
+      Description = "Selector expression (positional shorthand for --selector)",
+      Arity = ArgumentArity.ZeroOrOne,
+    };
+
+    // watch always uses live evaluation (PreferCachedSnapshot: false); expose --live to keep the
+    // selector-only helper signature consistent, defaulting to live.
+    var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation for selector" };
+    liveOpt.DefaultValueFactory = _ => true;
 
     var debounceOpt = new Option<int>("--debounce-ms") { Description = "Debounce between evaluations in ms" };
     debounceOpt.DefaultValueFactory = _ => 100;
@@ -255,6 +298,8 @@ internal static class CliFlowCommands
     });
 
     cmd.Add(selectorOpt);
+    cmd.Add(queryArg);
+    cmd.Add(liveOpt);
     cmd.Add(debounceOpt);
     cmd.Add(limitOpt);
 
@@ -262,32 +307,27 @@ internal static class CliFlowCommands
     {
       var ctx = CliContextAccessor.Current;
 
-      if (!TryCreateDaemonClient(ctx, out var daemonClient, out var daemonError))
+      if (!CliSelection.TryParseSelectorOnly(parse, selectorOpt, queryArg, liveOpt, out var parsedSelector, out var selectorError))
       {
-        CliOutput.Write(new
-        {
-          ok = false,
-          meta = new { traceId = ctx.TraceId },
-          error = new { code = "InvalidOperation", message = daemonError },
-          traceId = ctx.TraceId,
-        }, ctx.Format);
-        return 1;
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectorError ?? "Invalid selector."));
       }
 
-      var selectorRaw = parse.GetValue(selectorOpt) ?? "";
-      var selector = new Selector(selectorRaw.Trim(), PreferCachedSnapshot: false);
-      var target = CliTargets.ParseOrDefaultFocused(parse, targetOpts);
+      if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
+
+      if (!TryCreateDaemonClient(ctx, out var daemonClient, out var daemonError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.Unavailable, daemonError));
+      }
+
+      // watch always evaluates live, regardless of --live, since it streams change.
+      var selector = new Selector(parsedSelector!.Expr, PreferCachedSnapshot: false);
       var debounceMs = Math.Max(0, parse.GetValue(debounceOpt));
       var debounce = TimeSpan.FromMilliseconds(debounceMs);
       var limit = Math.Max(1, parse.GetValue(limitOpt));
       var request = new FindRequest(selector, target, limit);
-
-      var streamOptions = new JsonSerializerOptions
-      {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = false,
-      };
 
       var lastSignature = "";
       while (!ct.IsCancellationRequested)
@@ -300,21 +340,22 @@ internal static class CliFlowCommands
 
         if (!res.Ok)
         {
-          Console.Out.WriteLine(JsonSerializer.Serialize(new
+          // watch always emits compact JSONL regardless of --format.
+          CliOutput.WriteLine(new
           {
             type = "watch.error",
             timestamp = DateTimeOffset.UtcNow,
             selector = request.Selector.Expr,
             error = res.Error,
             meta = res.Meta,
-          }, streamOptions));
-          return 1;
+          });
+          return ExitCodes.For(res.Error);
         }
 
         var signature = BuildMatchSignature(res.Matches);
         if (!string.Equals(signature, lastSignature, StringComparison.Ordinal))
         {
-          Console.Out.WriteLine(JsonSerializer.Serialize(new
+          CliOutput.WriteLine(new
           {
             type = "watch.update",
             timestamp = DateTimeOffset.UtcNow,
@@ -322,7 +363,7 @@ internal static class CliFlowCommands
             count = res.Matches.Count,
             matches = res.Matches,
             meta = res.Meta,
-          }, streamOptions));
+          });
           lastSignature = signature;
         }
 
@@ -346,6 +387,10 @@ internal static class CliFlowCommands
     return ObserveEventSet.All;
   }
 
+  // Short connect/ping budget for the watch daemon probe so a stale marker no longer costs a
+  // full command --timeout (PID-liveness already filters dead markers). (plan §6)
+  private static readonly TimeSpan DaemonProbeBudget = TimeSpan.FromMilliseconds(300);
+
   private static CancellationTokenSource CreateTimeoutCts(TimeSpan timeout, CancellationToken ct)
   {
     var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -368,10 +413,18 @@ internal static class CliFlowCommands
       return false;
     }
 
+    // PID-liveness before the pipe ping: drop a stale marker instead of paying a connect wait.
+    if (!marker.IsAlive())
+    {
+      DaemonMarker.TryDeleteStale();
+      error = "Daemon unreachable. Restart with `peeku --daemon`.";
+      return false;
+    }
+
     try
     {
-      using var pingCts = CreateTimeoutCts(ctx.Timeout, CancellationToken.None);
-      var rpc = new DaemonJsonRpcClient(marker.PipeName, ctx.Timeout);
+      using var pingCts = new CancellationTokenSource(DaemonProbeBudget);
+      var rpc = new DaemonJsonRpcClient(marker.PipeName, DaemonProbeBudget);
       var ok = rpc.TryPingAsync(pingCts.Token).GetAwaiter().GetResult();
       if (!ok)
       {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace peeku.Cli;
@@ -67,6 +68,63 @@ internal sealed record DaemonMarker(
     catch
     {
       return false;
+    }
+  }
+
+  /// <summary>Daemon process name (no extension), e.g. <c>peeku-daemon.exe</c> reports <c>peeku-daemon</c>.</summary>
+  private const string DaemonProcessName = "peeku-daemon";
+
+  /// <summary>
+  /// True when the marker's <see cref="Pid"/> refers to a live process whose name matches the
+  /// daemon. A microsecond PID check that lets callers skip a costly pipe round-trip against a
+  /// stale marker (a crashed daemon's PID is dead or recycled to an unrelated process).
+  /// </summary>
+  internal bool IsAlive()
+  {
+    if (Pid <= 0)
+    {
+      return false;
+    }
+
+    try
+    {
+      using var proc = Process.GetProcessById(Pid);
+      if (proc.HasExited)
+      {
+        return false;
+      }
+
+      // Guard against PID reuse: the recycled PID must still be the daemon.
+      return string.Equals(proc.ProcessName, DaemonProcessName, StringComparison.OrdinalIgnoreCase);
+    }
+    catch (ArgumentException)
+    {
+      // No process with this id => dead.
+      return false;
+    }
+    catch (InvalidOperationException)
+    {
+      // Process already exited between lookup and inspection.
+      return false;
+    }
+  }
+
+  /// <summary>Best-effort delete of the marker file at <see cref="DefaultPath"/>; swallows IO races.</summary>
+  internal static void TryDeleteStale()
+  {
+    try
+    {
+      var path = DefaultPath;
+      if (File.Exists(path))
+      {
+        File.Delete(path);
+      }
+    }
+    catch (IOException)
+    {
+    }
+    catch (UnauthorizedAccessException)
+    {
     }
   }
 

@@ -31,4 +31,12 @@ internal static class CliOutput
     var pretty = JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonOptions) { WriteIndented = true });
     Console.Out.WriteLine(pretty);
   }
+
+  /// <summary>
+  /// Writes one compact JSON line using the canonical <see cref="JsonOptions"/>
+  /// (compact, CamelCase, WhenWritingNull). Used for streaming JSONL (e.g. <c>watch</c>),
+  /// which always emits compact JSONL regardless of <c>--format</c>.
+  /// </summary>
+  internal static void WriteLine(object? value)
+    => Console.Out.WriteLine(JsonSerializer.Serialize(value, JsonOptions));
 }

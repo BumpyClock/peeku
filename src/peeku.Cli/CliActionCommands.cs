@@ -21,7 +21,7 @@ internal static class CliActionCommands
     var cmd = new Command("click", "Click an element");
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
 
-    var selection = AddSelectionOptions(cmd);
+    var selection = CliSelection.AddTo(cmd);
 
     var methodOpt = new Option<string>("--method") { Description = "auto|uia|input" };
     methodOpt.DefaultValueFactory = _ => "auto";
@@ -43,10 +43,14 @@ internal static class CliActionCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      if (!TryParseSelection(parse, selection, out var elementRef, out var selector, out var selectionError))
+      if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
-        WriteInvalidArgument(ctx, selectionError ?? "Invalid selection.");
-        return 1;
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectionError ?? "Invalid selection."));
+      }
+
+      if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
       }
 
       var method = ParseMethod(parse.GetValue(methodOpt));
@@ -55,11 +59,11 @@ internal static class CliActionCommands
       var res = await client.ClickAsync(new ClickRequest(
         Element: elementRef,
         Selector: selector,
-        Target: CliTargets.ParseOptional(parse, targetOpts),
+        Target: target,
         Method: method), cts.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -69,27 +73,31 @@ internal static class CliActionCommands
   {
     var cmd = new Command("invoke", "Invoke an element (UIA invoke when available)");
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
-    var selection = AddSelectionOptions(cmd);
+    var selection = CliSelection.AddTo(cmd);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      if (!TryParseSelection(parse, selection, out var elementRef, out var selector, out var selectionError))
+      if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
-        WriteInvalidArgument(ctx, selectionError ?? "Invalid selection.");
-        return 1;
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectionError ?? "Invalid selection."));
+      }
+
+      if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
       }
 
       var client = CliPeekuClient.CreateDefault();
       var res = await client.InvokeAsync(new InvokeRequest(
         Element: elementRef,
         Selector: selector,
-        Target: CliTargets.ParseOptional(parse, targetOpts)), cts.Token).ConfigureAwait(false);
+        Target: target), cts.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -100,7 +108,7 @@ internal static class CliActionCommands
     var cmd = new Command("set-value", "Set Value pattern text on an element");
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
 
-    var selection = AddSelectionOptions(cmd);
+    var selection = CliSelection.AddTo(cmd);
     var valueOpt = new Option<string>("--value") { Description = "Value text" };
     valueOpt.Required = true;
 
@@ -111,10 +119,14 @@ internal static class CliActionCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      if (!TryParseSelection(parse, selection, out var elementRef, out var selector, out var selectionError))
+      if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
-        WriteInvalidArgument(ctx, selectionError ?? "Invalid selection.");
-        return 1;
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectionError ?? "Invalid selection."));
+      }
+
+      if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
       }
 
       var value = parse.GetValue(valueOpt) ?? "";
@@ -123,11 +135,11 @@ internal static class CliActionCommands
       var res = await client.SetValueAsync(new SetValueRequest(
         Element: elementRef,
         Selector: selector,
-        Target: CliTargets.ParseOptional(parse, targetOpts),
+        Target: target,
         Value: value), cts.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -138,26 +150,24 @@ internal static class CliActionCommands
     var cmd = new Command("type", "Type text into an element");
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
 
-    var selection = AddSelectionOptions(cmd);
+    // type's positional is TEXT (maps to --text), not a query selector (plan §3 `type TEXT?`).
+    var selection = CliSelection.AddTo(cmd, withPositionalQuery: false);
 
-    var textOpt = new Option<string>("--text") { Description = "Text to type" };
-    textOpt.Required = true;
+    var textOpt = new Option<string?>("--text") { Description = "Text to type" };
 
-    var appendOpt = new Option<string>("--append") { Description = "true|false" };
-    appendOpt.DefaultValueFactory = _ => "true";
-    appendOpt.Validators.Add(r =>
+    var textArg = new Argument<string?>("text")
     {
-      var v = (r.GetValueOrDefault<string>() ?? "true").Trim();
-      if (!string.Equals(v, "true", StringComparison.OrdinalIgnoreCase) &&
-          !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase))
-      {
-        r.AddError("Invalid --append. Allowed: true|false");
-      }
-    });
+      Description = "Text to type (positional shorthand for --text)",
+      Arity = ArgumentArity.ZeroOrOne,
+    };
+
+    var appendOpt = new Option<bool>("--append") { Description = "Append to existing text (default true)" };
+    appendOpt.DefaultValueFactory = _ => true;
 
     var delayOpt = new Option<int?>("--delay-ms") { Description = "Optional inter-key delay (ms)" };
 
     cmd.Add(textOpt);
+    cmd.Add(textArg);
     cmd.Add(appendOpt);
     cmd.Add(delayOpt);
 
@@ -166,28 +176,45 @@ internal static class CliActionCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      if (!TryParseSelection(parse, selection, out var elementRef, out var selector, out var selectionError))
+      // type's positional is TEXT, not a selector: --ref/--selector are OPTIONAL (both may be
+      // null), so `type "hello" --app notepad` types into the target-resolved window.
+      if (!CliSelection.TryParseOptionalElement(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
-        WriteInvalidArgument(ctx, selectionError ?? "Invalid selection.");
-        return 1;
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectionError ?? "Invalid selection."));
       }
 
-      var text = parse.GetValue(textOpt) ?? "";
+      if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
 
-      var appendRaw = parse.GetValue(appendOpt) ?? "true";
-      var append = !string.Equals(appendRaw.Trim(), "false", StringComparison.OrdinalIgnoreCase);
+      // Precedence: --text > positional text.
+      var textFlag = parse.GetValue(textOpt);
+      var textPositional = parse.GetValue(textArg);
+      if (!string.IsNullOrEmpty(textFlag) && !string.IsNullOrEmpty(textPositional))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Provide text via positional argument or --text, not both."));
+      }
+
+      var text = !string.IsNullOrEmpty(textFlag) ? textFlag : textPositional;
+      if (string.IsNullOrEmpty(text))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Provide text via positional argument or --text."));
+      }
+
+      var append = parse.GetValue(appendOpt);
 
       var client = CliPeekuClient.CreateDefault();
       var res = await client.TypeAsync(new TypeRequest(
         Element: elementRef,
         Selector: selector,
-        Target: CliTargets.ParseOptional(parse, targetOpts),
+        Target: target,
         Text: text,
         Append: append,
         DelayMs: parse.GetValue(delayOpt)), cts.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -198,7 +225,7 @@ internal static class CliActionCommands
     var cmd = new Command("scroll", "Scroll an element");
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
 
-    var selection = AddSelectionOptions(cmd);
+    var selection = CliSelection.AddTo(cmd);
 
     var deltaOpt = new Option<int?>("--delta") { Description = "Wheel delta (e.g. -120|120)" };
     var linesOpt = new Option<int?>("--lines") { Description = "Line count (positive/negative)" };
@@ -224,18 +251,21 @@ internal static class CliActionCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      if (!TryParseSelection(parse, selection, out var elementRef, out var selector, out var selectionError))
+      if (!CliSelection.TryParseOptional(parse, selection, out var elementRef, out var selector, out var selectionError))
       {
-        WriteInvalidArgument(ctx, selectionError ?? "Invalid selection.");
-        return 1;
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectionError ?? "Invalid selection."));
+      }
+
+      if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
       }
 
       var delta = parse.GetValue(deltaOpt);
       var lines = parse.GetValue(linesOpt);
       if (delta is null == lines is null)
       {
-        WriteInvalidArgument(ctx, "Provide exactly one of --delta or --lines.");
-        return 1;
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Provide exactly one of --delta or --lines."));
       }
 
       var direction = ParseScrollDirection(parse.GetValue(directionOpt));
@@ -244,13 +274,13 @@ internal static class CliActionCommands
       var res = await client.ScrollAsync(new ScrollRequest(
         Element: elementRef,
         Selector: selector,
-        Target: CliTargets.ParseOptional(parse, targetOpts),
+        Target: target,
         Delta: delta,
         Lines: lines,
         Direction: direction), cts.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -274,72 +304,10 @@ internal static class CliActionCommands
       var res = await client.HotkeyAsync(new HotkeyRequest(Keys: keys), cts.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
-  }
-
-  private sealed record SelectionOptions(
-    Option<string?> Ref,
-    Option<string?> SnapshotId,
-    Option<string?> Selector,
-    Option<bool> Live);
-
-  private static SelectionOptions AddSelectionOptions(Command cmd)
-  {
-    var refOpt = new Option<string?>("--ref") { Description = "Element refId" };
-    var snapshotIdOpt = new Option<string?>("--snapshotId") { Description = "Optional snapshotId for elementRef" };
-    var selectorOpt = new Option<string?>("--selector") { Description = "Selector expression" };
-    var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation for selector" };
-    liveOpt.DefaultValueFactory = _ => false;
-
-    cmd.Add(refOpt);
-    cmd.Add(snapshotIdOpt);
-    cmd.Add(selectorOpt);
-    cmd.Add(liveOpt);
-
-    return new SelectionOptions(refOpt, snapshotIdOpt, selectorOpt, liveOpt);
-  }
-
-  private static bool TryParseSelection(
-    ParseResult parse,
-    SelectionOptions o,
-    out ElementRef? elementRef,
-    out Selector? selector,
-    out string? error)
-  {
-    elementRef = null;
-    selector = null;
-    error = null;
-
-    var refId = parse.GetValue(o.Ref);
-    var snapshotId = parse.GetValue(o.SnapshotId);
-    var selectorExpr = parse.GetValue(o.Selector);
-    var live = parse.GetValue(o.Live);
-
-    var hasRef = !string.IsNullOrWhiteSpace(refId);
-    var hasSelector = !string.IsNullOrWhiteSpace(selectorExpr);
-    if (hasRef == hasSelector)
-    {
-      error = "Provide exactly one of --ref or --selector.";
-      return false;
-    }
-
-    if (!string.IsNullOrWhiteSpace(snapshotId) && !hasRef)
-    {
-      error = "--snapshotId requires --ref.";
-      return false;
-    }
-
-    if (hasRef)
-    {
-      elementRef = new ElementRef(refId!.Trim(), string.IsNullOrWhiteSpace(snapshotId) ? null : snapshotId!.Trim());
-      return true;
-    }
-
-    selector = new Selector((selectorExpr ?? "").Trim(), PreferCachedSnapshot: !live);
-    return true;
   }
 
   private static ActionMethod ParseMethod(string? raw)
@@ -363,16 +331,5 @@ internal static class CliActionCommands
     }
 
     return cts;
-  }
-
-  private static void WriteInvalidArgument(CliContext ctx, string message)
-  {
-    CliOutput.Write(new
-    {
-      ok = false,
-      meta = new { traceId = ctx.TraceId },
-      error = new { code = "InvalidArgument", message },
-      traceId = ctx.TraceId,
-    }, ctx.Format);
   }
 }

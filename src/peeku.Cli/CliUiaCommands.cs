@@ -54,7 +54,11 @@ internal static class CliUiaCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      var target = CliTargets.ParseOrDefaultFocused(parse, targetOpts);
+      if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
+
       var props = ParseProps(parse.GetValue(propsOpt));
 
       var req = new UiaSnapshotRequest(
@@ -66,7 +70,7 @@ internal static class CliUiaCommands
       var client = CliPeekuClient.CreateDefault();
       var res = await client.UiaSnapshotAsync(req, cts.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -109,7 +113,11 @@ internal static class CliUiaCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      var target = CliTargets.ParseOrDefaultFocused(parse, targetOpts);
+      if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
+
       var props = ParseProps(parse.GetValue(propsOpt));
 
       var req = new SeeRequest(
@@ -122,7 +130,7 @@ internal static class CliUiaCommands
       var client = CliPeekuClient.CreateDefault();
       var res = await client.SeeAsync(req, cts.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -134,8 +142,14 @@ internal static class CliUiaCommands
 
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
 
-    var selectorOpt = new Option<string>("--selector") { Description = "Selector expression" };
-    selectorOpt.Required = true;
+    // --selector is no longer Required: the positional query is an accepted alternative.
+    var selectorOpt = new Option<string?>("--selector") { Description = "Selector expression" };
+
+    var queryArg = new Argument<string?>("query")
+    {
+      Description = "Selector expression (positional shorthand for --selector)",
+      Arity = ArgumentArity.ZeroOrOne,
+    };
 
     var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation for selector" };
     liveOpt.DefaultValueFactory = _ => false;
@@ -144,6 +158,7 @@ internal static class CliUiaCommands
     limitOpt.DefaultValueFactory = _ => 20;
 
     cmd.Add(selectorOpt);
+    cmd.Add(queryArg);
     cmd.Add(liveOpt);
     cmd.Add(limitOpt);
 
@@ -152,19 +167,25 @@ internal static class CliUiaCommands
       var ctx = CliContextAccessor.Current;
       using var cts = CreateTimeoutCts(ctx.Timeout, ct);
 
-      var selectorRaw = parse.GetValue(selectorOpt) ?? "";
-      var selector = new Selector(selectorRaw.Trim(), PreferCachedSnapshot: !parse.GetValue(liveOpt));
-      var target = CliTargets.ParseOptional(parse, targetOpts);
+      if (!CliSelection.TryParseSelectorOnly(parse, selectorOpt, queryArg, liveOpt, out var selector, out var selectorError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, selectorError ?? "Invalid selector."));
+      }
+
+      if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
 
       var req = new FindRequest(
-        Selector: selector,
+        Selector: selector!,
         Target: target,
         Limit: parse.GetValue(limitOpt));
 
       var client = CliPeekuClient.CreateDefault();
       var res = await client.FindAsync(req, cts.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -187,6 +208,13 @@ internal static class CliUiaCommands
     var snapshotIdOpt = new Option<string?>("--snapshotId") { Description = "Optional snapshotId for elementRef" };
 
     var selectorOpt = new Option<string?>("--selector") { Description = "Selector expression" };
+
+    var queryArg = new Argument<string?>("query")
+    {
+      Description = "Selector expression (positional shorthand for --selector)",
+      Arity = ArgumentArity.ZeroOrOne,
+    };
+
     var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation for selector" };
     liveOpt.DefaultValueFactory = _ => false;
 
@@ -205,6 +233,7 @@ internal static class CliUiaCommands
     cmd.Add(refOpt);
     cmd.Add(snapshotIdOpt);
     cmd.Add(selectorOpt);
+    cmd.Add(queryArg);
     cmd.Add(liveOpt);
     cmd.Add(propsOpt);
 
@@ -216,11 +245,27 @@ internal static class CliUiaCommands
       var refId = parse.GetValue(refOpt);
       var snapshotId = parse.GetValue(snapshotIdOpt);
       var selectorExpr = parse.GetValue(selectorOpt);
+      var positional = parse.GetValue(queryArg);
+
+      var hasSelector = !string.IsNullOrWhiteSpace(selectorExpr);
+      var hasPositional = !string.IsNullOrWhiteSpace(positional);
+      if (hasSelector && hasPositional)
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Provide a positional query or --selector, not both."));
+      }
+
+      // Precedence: --ref > --selector > positional. (element get keeps the optional "neither,
+      // use target" path; exactly-one enforcement is deferred to P2.)
+      var effectiveSelector = hasSelector ? selectorExpr : (hasPositional ? positional : null);
 
       var elementRef = string.IsNullOrWhiteSpace(refId) ? null : new ElementRef(refId!.Trim(), string.IsNullOrWhiteSpace(snapshotId) ? null : snapshotId!.Trim());
-      var selector = string.IsNullOrWhiteSpace(selectorExpr) ? null : new Selector(selectorExpr!.Trim(), PreferCachedSnapshot: !parse.GetValue(liveOpt));
+      var selector = string.IsNullOrWhiteSpace(effectiveSelector) ? null : new Selector(effectiveSelector!.Trim(), PreferCachedSnapshot: !parse.GetValue(liveOpt));
 
-      var target = CliTargets.ParseOptional(parse, targetOpts);
+      if (!CliTargets.TryParseOptional(parse, targetOpts, out var target, out var targetError))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+      }
+
       var props = ParseProps(parse.GetValue(propsOpt));
 
       var req = new ElementGetRequest(
@@ -232,7 +277,7 @@ internal static class CliUiaCommands
       var client = CliPeekuClient.CreateDefault();
       var res = await client.ElementGetAsync(req, cts.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;

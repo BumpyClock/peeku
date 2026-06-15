@@ -30,7 +30,7 @@ internal static class CliCommandTree
       var client = CliPeekuClient.CreateDefault();
       var res = await client.DoctorAsync(new global::peeku.DoctorRequest(Deep: parse.GetValue(deepOpt)), cts.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -111,7 +111,7 @@ internal static class CliCommandTree
       }
 
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -129,7 +129,7 @@ internal static class CliCommandTree
       var client = CliPeekuClient.CreateDefault();
       var res = await client.WindowsFocusedAsync(cts.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;
@@ -193,7 +193,7 @@ internal static class CliCommandTree
       var client = CliPeekuClient.CreateDefault();
       var res = await client.CaptureImageAsync(req, cts.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
-      return res.Ok ? 0 : 1;
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
 
     return cmd;

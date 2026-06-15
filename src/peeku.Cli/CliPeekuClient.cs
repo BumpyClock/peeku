@@ -11,6 +11,10 @@ internal sealed class CliPeekuClient : global::peeku.IPeekuClient
     _warning = string.IsNullOrWhiteSpace(warning) ? null : warning.Trim();
   }
 
+  // Short budget for the connect/ping probe so a stale marker no longer costs a full
+  // command --timeout (plan §6). PID-liveness already filters dead/mismatched markers.
+  private static readonly TimeSpan ProbeBudget = TimeSpan.FromMilliseconds(300);
+
   internal static global::peeku.IPeekuClient CreateDefault()
   {
     if (!DaemonMarker.TryLoad(out var marker))
@@ -18,9 +22,16 @@ internal sealed class CliPeekuClient : global::peeku.IPeekuClient
       return new CliPeekuClient(new global::peeku.WindowsClient(), "");
     }
 
-    var ctx = CliContextAccessor.Current;
-    var rpc = new DaemonJsonRpcClient(marker.PipeName, ctx.Timeout);
-    using var cts = ctx.Timeout > TimeSpan.Zero ? new CancellationTokenSource(ctx.Timeout) : new CancellationTokenSource();
+    // PID-liveness before the pipe ping: if the daemon process is dead or its PID was
+    // recycled to an unrelated process, drop the stale marker and skip the round-trip.
+    if (!marker.IsAlive())
+    {
+      DaemonMarker.TryDeleteStale();
+      return new CliPeekuClient(new global::peeku.WindowsClient(), "");
+    }
+
+    var rpc = new DaemonJsonRpcClient(marker.PipeName, ProbeBudget);
+    using var cts = new CancellationTokenSource(ProbeBudget);
     var pingOk = rpc.TryPingAsync(cts.Token).GetAwaiter().GetResult();
     if (pingOk)
     {
