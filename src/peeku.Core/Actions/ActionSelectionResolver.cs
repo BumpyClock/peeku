@@ -29,17 +29,23 @@ internal static class ActionSelectionResolver
     var hasElement = element is not null && !string.IsNullOrWhiteSpace(element.RefId);
     var hasSelector = selector is not null && !string.IsNullOrWhiteSpace(selector.Expr);
 
-    if (hasElement == hasSelector)
+    if (hasElement && hasSelector)
     {
       return new Resolution(
         Ok: false,
         Error: PeekuErrors.Create(
           PeekuErrorCode.InvalidArgument,
-          "Provide exactly one of elementRef/refId or selector.",
+          "Provide only one of elementRef/refId or selector.",
           new { hasElementRef = hasElement, hasSelector }));
     }
 
     var targetUsed = target ?? Target.Focused();
+
+    // Neither element nor selector: fall back to the target window's focused element.
+    if (!hasElement && !hasSelector)
+    {
+      return await ResolveFocused(targetUsed, resolveRoot, ct).ConfigureAwait(false);
+    }
 
     if (hasSelector && selector is not null && !selector.PreferCachedSnapshot)
     {
@@ -231,6 +237,157 @@ internal static class ActionSelectionResolver
         Element: new ElementRef(refId),
         Rect: rect),
       Warning: rootWarning);
+  }
+
+  private static async Task<Resolution> ResolveFocused(
+    Target targetUsed,
+    Func<Target, FlaUI.UIA3.UIA3Automation, CancellationToken, (FlaUI.Core.AutomationElements.AutomationElement? Root, string? Warning)> resolveRoot,
+    CancellationToken ct)
+  {
+    using var automation = new FlaUI.UIA3.UIA3Automation();
+
+    var (root, rootWarning) = resolveRoot(targetUsed, automation, ct);
+    if (root is null)
+    {
+      var code = rootWarning is not null && rootWarning.Contains("not supported", StringComparison.OrdinalIgnoreCase)
+        ? PeekuErrorCode.NotSupported
+        : PeekuErrorCode.WindowNotFound;
+
+      return new Resolution(
+        Ok: false,
+        Error: PeekuErrors.Create(code, "Target window not found."),
+        Warning: rootWarning);
+    }
+
+    // Focused element is system-global; bring the target window forward so keyboard focus is inside
+    // it before querying, then settle briefly.
+    try
+    {
+      var hwnd = root.Properties.NativeWindowHandle.ValueOrDefault;
+      if (hwnd != IntPtr.Zero)
+      {
+        Win32Windows.BringToForeground(hwnd);
+        await Task.Delay(75, ct).ConfigureAwait(false);
+      }
+    }
+    catch (OperationCanceledException)
+    {
+      throw;
+    }
+    catch
+    {
+      // Foreground best-effort; continue with whatever has focus.
+    }
+
+    FlaUI.Core.AutomationElements.AutomationElement? focused = null;
+    try
+    {
+      focused = automation.FocusedElement();
+    }
+    catch
+    {
+      focused = null;
+    }
+
+    // Validate the focused element is within the target window's subtree; otherwise fall back to root.
+    var chosen = IsWithinWindow(automation, root, focused) ? focused! : root;
+
+    string refId;
+    try
+    {
+      refId = UiaRefId.Create(chosen);
+    }
+    catch (Exception ex)
+    {
+      return new Resolution(
+        Ok: false,
+        Error: PeekuErrors.Create(
+          PeekuErrorCode.Internal,
+          "Failed to compute element refId.",
+          new { exception = ex.GetType().FullName, ex.Message, ex.HResult }),
+        Warning: rootWarning);
+    }
+
+    var rect = ReadRect(chosen) ?? ReadRect(root);
+    if (rect is null)
+    {
+      return new Resolution(
+        Ok: false,
+        Error: PeekuErrors.Create(
+          PeekuErrorCode.NotFound,
+          "Element rect not available.",
+          new { refId, target = targetUsed }),
+        Warning: rootWarning);
+    }
+
+    var warning = CombineWarnings(rootWarning, "No element/selector provided; targeted the window's focused element.");
+
+    return new Resolution(
+      Ok: true,
+      Selection: new ResolvedActionSelection(
+        Target: targetUsed,
+        SnapshotId: "",
+        Element: new ElementRef(refId),
+        Rect: rect),
+      Warning: warning);
+  }
+
+  private static bool IsWithinWindow(
+    FlaUI.UIA3.UIA3Automation automation,
+    FlaUI.Core.AutomationElements.AutomationElement root,
+    FlaUI.Core.AutomationElements.AutomationElement? focused)
+  {
+    if (focused is null)
+    {
+      return false;
+    }
+
+    try
+    {
+      if (focused.Equals(root))
+      {
+        return true;
+      }
+
+      var walker = automation.TreeWalkerFactory.GetControlViewWalker();
+      var current = focused;
+      for (var i = 0; i < 40; i++)
+      {
+        var parent = walker.GetParent(current);
+        if (parent is null)
+        {
+          return false;
+        }
+
+        if (parent.Equals(root))
+        {
+          return true;
+        }
+
+        current = parent;
+      }
+    }
+    catch
+    {
+      return false;
+    }
+
+    return false;
+  }
+
+  private static string? CombineWarnings(string? a, string? b)
+  {
+    if (string.IsNullOrWhiteSpace(a))
+    {
+      return string.IsNullOrWhiteSpace(b) ? null : b;
+    }
+
+    if (string.IsNullOrWhiteSpace(b))
+    {
+      return a;
+    }
+
+    return $"{a} {b}";
   }
 
   private static Rect? ReadRect(FlaUI.Core.AutomationElements.AutomationElement element)

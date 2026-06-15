@@ -106,6 +106,20 @@ internal static class Win32Windows
     return TryGetWindowInfo(hwnd);
   }
 
+  /// <summary>
+  /// Brings the given window to the foreground so keyboard focus lands inside it. Needed because
+  /// UIA's focused-element query is system-global. Returns the Win32 SetForegroundWindow result.
+  /// </summary>
+  internal static bool BringToForeground(IntPtr hwnd)
+  {
+    if (hwnd == IntPtr.Zero)
+    {
+      return false;
+    }
+
+    return SetForegroundWindow(hwnd);
+  }
+
   private static WindowInfo? TryGetWindowInfo(IntPtr hwnd)
   {
     var title = GetTitle(hwnd);
@@ -161,4 +175,8 @@ internal static class Win32Windows
 
   [DllImport("user32.dll")]
   private static extern IntPtr GetForegroundWindow();
+
+  [DllImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static extern bool SetForegroundWindow(IntPtr hWnd);
 }
