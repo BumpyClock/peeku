@@ -76,6 +76,8 @@ internal sealed class WarningPeekuClient : IPeekuClient
 
   public async Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default)
     => WithWarning(await _inner.DiffAsync(req, ct).ConfigureAwait(false));
+  public async Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.ElementAtPointAsync(req, ct).ConfigureAwait(false));
 
   private T WithWarning<T>(T result) where T : ResultBase
   {

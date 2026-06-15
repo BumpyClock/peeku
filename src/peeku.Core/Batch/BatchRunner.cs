@@ -395,6 +395,26 @@ internal static class BatchRunner
           return (res.Ok, res, res.Error);
         }
 
+        case "peeku_element_from_point":
+        {
+          var x = BatchArgs.ReadInt(args, "x");
+          var y = BatchArgs.ReadInt(args, "y");
+          if (x is null || y is null)
+          {
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "x and y are required."));
+          }
+
+          var target = BatchArgs.TryReadTarget(args, out var t, out _) ? t : null;
+          var req = new ElementAtPointRequest(
+            X: x.Value,
+            Y: y.Value,
+            Target: target,
+            IncludeProperties: BatchArgs.ReadUiaPropertiesMode(args, "includeProperties") ?? UiaPropertiesMode.All);
+
+          var res = await client.ElementAtPointAsync(req, ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
         default:
           return (false, null, PeekuErrors.Create(PeekuErrorCode.NotSupported, "Unknown tool.", new { tool }));
       }

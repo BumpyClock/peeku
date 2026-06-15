@@ -102,6 +102,8 @@ internal sealed class CliPeekuClient : global::peeku.IPeekuClient
 
   public Task<global::peeku.DiffResult> DiffAsync(global::peeku.DiffRequest req, CancellationToken ct = default)
     => _inner.DiffAsync(req, ct);
+  public Task<global::peeku.ElementAtPointResult> ElementAtPointAsync(global::peeku.ElementAtPointRequest req, CancellationToken ct = default)
+    => _inner.ElementAtPointAsync(req, ct);
 }
 
 internal static class CliDoctor

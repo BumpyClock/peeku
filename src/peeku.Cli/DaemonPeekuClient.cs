@@ -379,6 +379,27 @@ internal sealed class DaemonPeekuClient : IPeekuClient
       ct);
   }
 
+  public Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["x"] = req.X,
+      ["y"] = req.Y,
+      ["includeProperties"] = UiaModeString(req.IncludeProperties),
+    };
+
+    if (req.Target is not null)
+    {
+      args["target"] = BuildTarget(req.Target);
+    }
+
+    return CallResultAsync(
+      "peeku_element_from_point",
+      args,
+      (meta, error) => new ElementAtPointResult(false, meta, new UiaElement(new ElementRef("")), Array.Empty<UiaElement>(), error),
+      ct);
+  }
+
   private async Task<T> CallResultAsync<T>(
     string tool,
     object args,

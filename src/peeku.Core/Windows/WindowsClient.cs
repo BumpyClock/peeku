@@ -223,6 +223,8 @@ public sealed class WindowsClient : IPeekuClient
 
   public Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default)
     => new UiaClient().DiffAsync(req, ct);
+  public Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default)
+    => new UiaClient().ElementAtPointAsync(req, ct);
 
   private static string? CombineWarnings(string? a, string? b)
   {

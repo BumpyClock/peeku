@@ -31,6 +31,7 @@ public interface IPeekuClient
   Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default);
 
   Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default);
+  Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default);
 }
 
 public abstract record Target
@@ -352,4 +353,17 @@ public record DiffResult(
   string? SnapshotIdBefore,
   string? SnapshotIdAfter,
   UiaTreeDelta? Delta = null,
+  PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+
+public record ElementAtPointRequest(
+  int X,
+  int Y,
+  Target? Target = null,
+  UiaPropertiesMode IncludeProperties = UiaPropertiesMode.All);
+
+public record ElementAtPointResult(
+  bool Ok,
+  ResultMeta Meta,
+  UiaElement Element,
+  IReadOnlyList<UiaElement> Ancestors,
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);

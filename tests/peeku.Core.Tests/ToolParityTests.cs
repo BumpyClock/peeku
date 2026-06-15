@@ -102,6 +102,7 @@ public sealed class ToolParityTests
       ["peeku_element_get"]     = "ElementGetAsync",
       ["peeku_set_value"]       = "SetValueAsync",
       ["peeku_capture_image"]   = "CaptureImageAsync",
+      ["peeku_element_from_point"] = "ElementAtPointAsync",
     };
 
     // Collect the public async methods on IPeekuClient.
@@ -194,6 +195,8 @@ public sealed class ToolParityTests
 
     // Require both targetBefore and targetAfter.
     "peeku_diff"            => """{"targetBefore":"desktop","targetAfter":"desktop"}""",
+    // Require x and y coordinates.
+    "peeku_element_from_point" => """{"x":100,"y":200}""",
 
     _ => "{}",
   };
@@ -285,6 +288,8 @@ file sealed class ThrowingFakeClient : IPeekuClient
 
   public Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default)
     => Task.FromException<DiffResult>(new NotImplementedException(nameof(DiffAsync)));
+  public Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default)
+    => Task.FromException<ElementAtPointResult>(new NotImplementedException(nameof(ElementAtPointAsync)));
 
 #pragma warning disable CS1998 // async method lacks await — intentional (throws before any yield)
   private static async IAsyncEnumerable<ObservationEvent> ThrowAsyncEnumerable(

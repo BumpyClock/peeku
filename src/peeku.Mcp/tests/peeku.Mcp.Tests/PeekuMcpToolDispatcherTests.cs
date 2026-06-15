@@ -103,6 +103,7 @@ public sealed class PeekuMcpToolDispatcherTests
     public IAsyncEnumerable<ObservationEvent> ObserveAsync(ObserveRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default) => throw new NotImplementedException();
   }
 }
 

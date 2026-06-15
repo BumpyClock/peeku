@@ -195,6 +195,7 @@ internal static class CliUiaCommands
   {
     var element = new Command("element", "Element inspection");
     element.Add(CreateElementGetCommand());
+    element.Add(CreateElementAtPointCommand());
     return element;
   }
 
@@ -276,6 +277,54 @@ internal static class CliUiaCommands
 
       var client = CliPeekuClient.CreateDefault();
       var res = await client.ElementGetAsync(req, cts.Token).ConfigureAwait(false);
+      CliOutput.Write(res, ctx.Format);
+      return res.Ok ? 0 : ExitCodes.For(res.Error);
+    });
+
+    return cmd;
+  }
+
+  private static Command CreateElementAtPointCommand()
+  {
+    var cmd = new Command("at-point", "Resolve element at screen pixel (hit-test)");
+
+    var xOpt = new Option<int>("--x") { Description = "Physical screen X coordinate" };
+    xOpt.Required = true;
+
+    var yOpt = new Option<int>("--y") { Description = "Physical screen Y coordinate" };
+    yOpt.Required = true;
+
+    var propsOpt = new Option<string>("--includeProperties") { Description = "basic|all" };
+    propsOpt.DefaultValueFactory = _ => "all";
+    propsOpt.Validators.Add(r =>
+    {
+      var v = r.GetValueOrDefault<string>() ?? "all";
+      if (!string.Equals(v, "basic", StringComparison.OrdinalIgnoreCase) &&
+          !string.Equals(v, "all", StringComparison.OrdinalIgnoreCase))
+      {
+        r.AddError("Invalid --includeProperties. Allowed: basic|all");
+      }
+    });
+
+    cmd.Add(xOpt);
+    cmd.Add(yOpt);
+    cmd.Add(propsOpt);
+
+    cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
+    {
+      var ctx = CliContextAccessor.Current;
+      using var cts = CreateTimeoutCts(ctx.Timeout, ct);
+
+      var props = ParseProps(parse.GetValue(propsOpt));
+
+      var req = new ElementAtPointRequest(
+        X: parse.GetValue(xOpt),
+        Y: parse.GetValue(yOpt),
+        Target: null,
+        IncludeProperties: props);
+
+      var client = CliPeekuClient.CreateDefault();
+      var res = await client.ElementAtPointAsync(req, cts.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
       return res.Ok ? 0 : ExitCodes.For(res.Error);
     });
