@@ -104,6 +104,21 @@ internal sealed class CliPeekuClient : global::peeku.IPeekuClient
     => _inner.DiffAsync(req, ct);
   public Task<global::peeku.ElementAtPointResult> ElementAtPointAsync(global::peeku.ElementAtPointRequest req, CancellationToken ct = default)
     => _inner.ElementAtPointAsync(req, ct);
+
+  public Task<global::peeku.WindowActionResult> WindowMoveAsync(global::peeku.WindowMoveRequest req, CancellationToken ct = default)
+    => _inner.WindowMoveAsync(req, ct);
+  public Task<global::peeku.WindowActionResult> WindowResizeAsync(global::peeku.WindowResizeRequest req, CancellationToken ct = default)
+    => _inner.WindowResizeAsync(req, ct);
+  public Task<global::peeku.WindowActionResult> WindowSetBoundsAsync(global::peeku.WindowBoundsRequest req, CancellationToken ct = default)
+    => _inner.WindowSetBoundsAsync(req, ct);
+  public Task<global::peeku.WindowActionResult> WindowMinimizeAsync(global::peeku.WindowStateRequest req, CancellationToken ct = default)
+    => _inner.WindowMinimizeAsync(req, ct);
+  public Task<global::peeku.WindowActionResult> WindowMaximizeAsync(global::peeku.WindowStateRequest req, CancellationToken ct = default)
+    => _inner.WindowMaximizeAsync(req, ct);
+  public Task<global::peeku.WindowActionResult> WindowRestoreAsync(global::peeku.WindowStateRequest req, CancellationToken ct = default)
+    => _inner.WindowRestoreAsync(req, ct);
+  public Task<global::peeku.WindowActionResult> WindowCloseAsync(global::peeku.WindowCloseRequest req, CancellationToken ct = default)
+    => _inner.WindowCloseAsync(req, ct);
 }
 
 internal static class CliDoctor

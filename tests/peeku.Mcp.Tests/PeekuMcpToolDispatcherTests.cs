@@ -137,5 +137,12 @@ public sealed class PeekuMcpToolDispatcherTests
     public Task<WaitResult> WaitAsync(WaitRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<WindowActionResult> WindowMoveAsync(WindowMoveRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<WindowActionResult> WindowResizeAsync(WindowResizeRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<WindowActionResult> WindowSetBoundsAsync(WindowBoundsRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<WindowActionResult> WindowMinimizeAsync(WindowStateRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<WindowActionResult> WindowMaximizeAsync(WindowStateRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<WindowActionResult> WindowRestoreAsync(WindowStateRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default) => throw new NotImplementedException();
   }
 }

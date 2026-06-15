@@ -32,6 +32,15 @@ public interface IPeekuClient
 
   Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default);
   Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default);
+
+  // Window management (S3)
+  Task<WindowActionResult> WindowMoveAsync(WindowMoveRequest req, CancellationToken ct = default);
+  Task<WindowActionResult> WindowResizeAsync(WindowResizeRequest req, CancellationToken ct = default);
+  Task<WindowActionResult> WindowSetBoundsAsync(WindowBoundsRequest req, CancellationToken ct = default);
+  Task<WindowActionResult> WindowMinimizeAsync(WindowStateRequest req, CancellationToken ct = default);
+  Task<WindowActionResult> WindowMaximizeAsync(WindowStateRequest req, CancellationToken ct = default);
+  Task<WindowActionResult> WindowRestoreAsync(WindowStateRequest req, CancellationToken ct = default);
+  Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default);
 }
 
 public abstract record Target
@@ -375,3 +384,22 @@ public record ElementAtPointResult(
   UiaElement Element,
   IReadOnlyList<UiaElement> Ancestors,
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+
+// ── Window management (S3) ────────────────────────────────────────────────────
+
+public record WindowMoveRequest(Target Target, int X, int Y);
+
+public record WindowResizeRequest(Target Target, int Width, int Height);
+
+public record WindowBoundsRequest(Target Target, int X, int Y, int Width, int Height);
+
+/// <summary>Used for minimize, maximize, restore, and close operations.</summary>
+public record WindowStateRequest(Target Target);
+
+public record WindowCloseRequest(Target Target, int WaitMs = 2000);
+
+public record WindowActionResult(
+  bool Ok,
+  ResultMeta Meta,
+  PeekuError? Error = null,
+  System.Text.Json.JsonElement? Evidence = null) : ResultBase(Ok, Meta, Error);

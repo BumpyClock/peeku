@@ -390,4 +390,62 @@ internal static class Win32Windows
   /// Public wrapper for use outside the class.
   /// </summary>
   internal static bool IsWindowMinimized(IntPtr hwnd) => IsIconic(hwnd);
+
+  // ── Window management (S3) ──────────────────────────────────────────────────
+
+  /// <summary>Sets window position/size. Returns false on failure; use GetLastWin32Error for details.</summary>
+  [DllImport("user32.dll", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  internal static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+  /// <summary>Posts a message to the window's message queue (fire-and-forget, does not wait for processing).</summary>
+  [DllImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  internal static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+  /// <summary>Returns whether <paramref name="hwnd"/> is maximized (zoomed).</summary>
+  [DllImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  internal static extern bool IsZoomed(IntPtr hWnd);
+
+  // ── SetWindowPos flags ─────────────────────────────────────────────────────
+  internal const uint SWP_NOSIZE      = 0x0001;
+  internal const uint SWP_NOMOVE      = 0x0002;
+  internal const uint SWP_NOZORDER    = 0x0004;
+  internal const uint SWP_NOACTIVATE  = 0x0010;
+
+  // ── ShowWindow commands (SW_RESTORE=9 already defined above as private) ────
+  internal const int SW_MINIMIZE = 6;
+  internal const int SW_MAXIMIZE = 3;
+  // SW_RESTORE = 9 already exists as private above; expose internally:
+  internal const int SW_RESTORE_PUBLIC = 9;
+
+  // ── Messages ───────────────────────────────────────────────────────────────
+  internal const uint WM_CLOSE = 0x0010;
+
+  // ── SPI for work-area (Win32Arrange) ───────────────────────────────────────
+  private const uint SPI_GETWORKAREA = 0x0030;
+
+  [DllImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, ref RECT pvParam, uint fWinIni);
+
+  /// <summary>
+  /// Returns the primary monitor's work area (excludes taskbar, docks, etc.).
+  /// PRIMARY monitor only in P1b — per-monitor rcWork via GetMonitorInfo is deferred to P2.
+  /// Source: https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow
+  /// </summary>
+  internal static bool TryGetPrimaryWorkArea(out RECT workArea)
+  {
+    workArea = default;
+    return SystemParametersInfo(SPI_GETWORKAREA, 0, ref workArea, 0);
+  }
+
+  /// <summary>
+  /// Exposes ShowWindow for window management (S3). SW_MINIMIZE=6, SW_MAXIMIZE=3, SW_RESTORE_PUBLIC=9.
+  /// </summary>
+  internal static bool ShowWindowManage(IntPtr hWnd, int nCmdShow) => ShowWindow(hWnd, nCmdShow);
+
+  /// <summary>Returns whether <paramref name="hwnd"/> is maximized.</summary>
+  internal static bool IsWindowMaximized(IntPtr hwnd) => IsZoomed(hwnd);
 }

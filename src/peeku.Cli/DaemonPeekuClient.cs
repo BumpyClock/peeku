@@ -401,6 +401,69 @@ internal sealed class DaemonPeekuClient : IPeekuClient
       ct);
   }
 
+  public Task<WindowActionResult> WindowMoveAsync(WindowMoveRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["target"] = BuildTarget(req.Target),
+      ["x"] = req.X,
+      ["y"] = req.Y,
+    };
+    return CallResultAsync("peeku_window_move", args, (meta, error) => new WindowActionResult(false, meta, error), ct);
+  }
+
+  public Task<WindowActionResult> WindowResizeAsync(WindowResizeRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["target"] = BuildTarget(req.Target),
+      ["width"] = req.Width,
+      ["height"] = req.Height,
+    };
+    return CallResultAsync("peeku_window_resize", args, (meta, error) => new WindowActionResult(false, meta, error), ct);
+  }
+
+  public Task<WindowActionResult> WindowSetBoundsAsync(WindowBoundsRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["target"] = BuildTarget(req.Target),
+      ["x"] = req.X,
+      ["y"] = req.Y,
+      ["width"] = req.Width,
+      ["height"] = req.Height,
+    };
+    return CallResultAsync("peeku_window_set_bounds", args, (meta, error) => new WindowActionResult(false, meta, error), ct);
+  }
+
+  public Task<WindowActionResult> WindowMinimizeAsync(WindowStateRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?> { ["target"] = BuildTarget(req.Target) };
+    return CallResultAsync("peeku_window_minimize", args, (meta, error) => new WindowActionResult(false, meta, error), ct);
+  }
+
+  public Task<WindowActionResult> WindowMaximizeAsync(WindowStateRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?> { ["target"] = BuildTarget(req.Target) };
+    return CallResultAsync("peeku_window_maximize", args, (meta, error) => new WindowActionResult(false, meta, error), ct);
+  }
+
+  public Task<WindowActionResult> WindowRestoreAsync(WindowStateRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?> { ["target"] = BuildTarget(req.Target) };
+    return CallResultAsync("peeku_window_restore", args, (meta, error) => new WindowActionResult(false, meta, error), ct);
+  }
+
+  public Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["target"] = BuildTarget(req.Target),
+      ["waitMs"] = req.WaitMs,
+    };
+    return CallResultAsync("peeku_window_close", args, (meta, error) => new WindowActionResult(false, meta, error), ct);
+  }
+
   private async Task<T> CallResultAsync<T>(
     string tool,
     object args,

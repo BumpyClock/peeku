@@ -103,6 +103,8 @@ public sealed class ToolParityTests
       ["peeku_set_value"]       = "SetValueAsync",
       ["peeku_capture_image"]   = "CaptureImageAsync",
       ["peeku_element_from_point"] = "ElementAtPointAsync",
+      // Window management (S3): set_bounds → SetBounds, not SetBoundsAsync directly from naive algo.
+      ["peeku_window_set_bounds"] = "WindowSetBoundsAsync",
     };
 
     // Collect the public async methods on IPeekuClient.
@@ -198,6 +200,15 @@ public sealed class ToolParityTests
     // Require x and y coordinates.
     "peeku_element_from_point" => """{"x":100,"y":200}""",
 
+    // Window management (S3) — all require target.
+    "peeku_window_move"       => """{"target":"focused_window","x":100,"y":100}""",
+    "peeku_window_resize"     => """{"target":"focused_window","width":800,"height":600}""",
+    "peeku_window_set_bounds" => """{"target":"focused_window","x":0,"y":0,"width":800,"height":600}""",
+    "peeku_window_minimize"   => """{"target":"focused_window"}""",
+    "peeku_window_maximize"   => """{"target":"focused_window"}""",
+    "peeku_window_restore"    => """{"target":"focused_window"}""",
+    "peeku_window_close"      => """{"target":"focused_window"}""",
+
     _ => "{}",
   };
 
@@ -290,6 +301,21 @@ file sealed class ThrowingFakeClient : IPeekuClient
     => Task.FromException<DiffResult>(new NotImplementedException(nameof(DiffAsync)));
   public Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default)
     => Task.FromException<ElementAtPointResult>(new NotImplementedException(nameof(ElementAtPointAsync)));
+
+  public Task<WindowActionResult> WindowMoveAsync(WindowMoveRequest req, CancellationToken ct = default)
+    => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowMoveAsync)));
+  public Task<WindowActionResult> WindowResizeAsync(WindowResizeRequest req, CancellationToken ct = default)
+    => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowResizeAsync)));
+  public Task<WindowActionResult> WindowSetBoundsAsync(WindowBoundsRequest req, CancellationToken ct = default)
+    => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowSetBoundsAsync)));
+  public Task<WindowActionResult> WindowMinimizeAsync(WindowStateRequest req, CancellationToken ct = default)
+    => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowMinimizeAsync)));
+  public Task<WindowActionResult> WindowMaximizeAsync(WindowStateRequest req, CancellationToken ct = default)
+    => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowMaximizeAsync)));
+  public Task<WindowActionResult> WindowRestoreAsync(WindowStateRequest req, CancellationToken ct = default)
+    => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowRestoreAsync)));
+  public Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default)
+    => Task.FromException<WindowActionResult>(new NotImplementedException(nameof(WindowCloseAsync)));
 
 #pragma warning disable CS1998 // async method lacks await — intentional (throws before any yield)
   private static async IAsyncEnumerable<ObservationEvent> ThrowAsyncEnumerable(

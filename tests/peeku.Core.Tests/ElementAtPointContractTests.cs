@@ -212,6 +212,20 @@ file sealed class ThrowingFakeClientForHitTest : IPeekuClient
     => Throw<DiffResult>();
   public Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default)
     => Throw<ElementAtPointResult>();
+  public Task<WindowActionResult> WindowMoveAsync(WindowMoveRequest req, CancellationToken ct = default)
+    => Throw<WindowActionResult>();
+  public Task<WindowActionResult> WindowResizeAsync(WindowResizeRequest req, CancellationToken ct = default)
+    => Throw<WindowActionResult>();
+  public Task<WindowActionResult> WindowSetBoundsAsync(WindowBoundsRequest req, CancellationToken ct = default)
+    => Throw<WindowActionResult>();
+  public Task<WindowActionResult> WindowMinimizeAsync(WindowStateRequest req, CancellationToken ct = default)
+    => Throw<WindowActionResult>();
+  public Task<WindowActionResult> WindowMaximizeAsync(WindowStateRequest req, CancellationToken ct = default)
+    => Throw<WindowActionResult>();
+  public Task<WindowActionResult> WindowRestoreAsync(WindowStateRequest req, CancellationToken ct = default)
+    => Throw<WindowActionResult>();
+  public Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default)
+    => Throw<WindowActionResult>();
 
   private static Task<T> Throw<T>()
     => Task.FromException<T>(new NotImplementedException());

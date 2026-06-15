@@ -33,6 +33,13 @@ public sealed class ToolRegistryTests
         "peeku_batch",
         "peeku_diff",
         "peeku_element_from_point",
+        "peeku_window_move",
+        "peeku_window_resize",
+        "peeku_window_set_bounds",
+        "peeku_window_minimize",
+        "peeku_window_maximize",
+        "peeku_window_restore",
+        "peeku_window_close",
       };
 
     var actual = ToolRegistry.All.Select(x => x.Name).ToArray();

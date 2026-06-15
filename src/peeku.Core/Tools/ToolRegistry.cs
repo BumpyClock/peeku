@@ -43,6 +43,13 @@ public static class ToolRegistry
       Create("peeku_batch", "Batch", "Execute a batch of tool calls.", BatchInputSchemaJson, BatchOutputSchemaJson),
       Create("peeku_diff", "Diff", "Snapshot two targets and diff their UIA trees by refId.", DiffInputSchemaJson, DiffOutputSchemaJson),
       Create("peeku_element_from_point", "Element From Point", "Resolve element at screen pixel (hit-test by coordinate).", ElementFromPointInputSchemaJson, ElementFromPointOutputSchemaJson),
+      Create("peeku_window_move", "Window Move", "Move a window to the given screen coordinates.", WindowMoveInputSchemaJson, WindowActionOutputSchemaJson),
+      Create("peeku_window_resize", "Window Resize", "Resize a window to the given dimensions.", WindowResizeInputSchemaJson, WindowActionOutputSchemaJson),
+      Create("peeku_window_set_bounds", "Window Set Bounds", "Move and resize a window in one call.", WindowSetBoundsInputSchemaJson, WindowActionOutputSchemaJson),
+      Create("peeku_window_minimize", "Window Minimize", "Minimize a window.", WindowStateInputSchemaJson, WindowActionOutputSchemaJson),
+      Create("peeku_window_maximize", "Window Maximize", "Maximize a window.", WindowStateInputSchemaJson, WindowActionOutputSchemaJson),
+      Create("peeku_window_restore", "Window Restore", "Restore a minimized or maximized window.", WindowStateInputSchemaJson, WindowActionOutputSchemaJson),
+      Create("peeku_window_close", "Window Close", "Close a window gracefully (WM_CLOSE) and report whether it closed.", WindowCloseInputSchemaJson, WindowActionOutputSchemaJson),
     ];
   }
 
@@ -133,5 +140,14 @@ public static class ToolRegistry
   private const string DiffOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"snapshotIdBefore":{"type":"string"},"snapshotIdAfter":{"type":"string"},"delta":{"type":"object","properties":{"added":{"type":"array","items":{"type":"object"}},"removed":{"type":"array","items":{"type":"object"}},"truncated":{"type":"boolean"}}}},"required":["ok","traceId"]}""";
   private const string ElementFromPointInputSchemaJson = """{"type":"object","properties":{"x":{"type":"integer","description":"Physical screen X coordinate"},"y":{"type":"integer","description":"Physical screen Y coordinate"},"target":{"description":"Optional target (unused for hit-test, reserved)","oneOf":[{"type":"string","enum":["desktop","focused_window","screen","window_hwnd","window_query"]},{"type":"object","properties":{"kind":{"type":"string","enum":["desktop","focused_window","screen","window_hwnd","window_query"]},"screenIndex":{"type":"integer"},"hwndHex":{"type":"string"},"query":{"type":"object","properties":{"titleContains":{"type":"string"},"processName":{"type":"string"},"processId":{"type":"integer"}}}},"required":["kind"]}]},"includeProperties":{"type":"string","enum":["basic","all"],"default":"all"}},"required":["x","y"]}""";
   private const string ElementFromPointOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"element":{"type":"object"},"ancestors":{"type":"array","items":{"type":"object"}}},"required":["ok","traceId","element","ancestors"]}""";
+
+  // ── Window management (S3) ────────────────────────────────────────────────
+  private const string WindowTargetSchema = """{"oneOf":[{"type":"string","enum":["focused_window","window_hwnd","window_query"]},{"type":"object","properties":{"kind":{"type":"string","enum":["focused_window","window_hwnd","window_query"]},"hwndHex":{"type":"string"},"query":{"type":"object","properties":{"titleContains":{"type":"string"},"processName":{"type":"string"},"processId":{"type":"integer"}}}},"required":["kind"]}]}""";
+  private const string WindowMoveInputSchemaJson = """{"type":"object","properties":{"target":""" + WindowTargetSchema + ""","x":{"type":"integer","description":"Screen X (physical pixels)"},"y":{"type":"integer","description":"Screen Y (physical pixels)"}},"required":["target","x","y"]}""";
+  private const string WindowResizeInputSchemaJson = """{"type":"object","properties":{"target":""" + WindowTargetSchema + ""","width":{"type":"integer","description":"Width (physical pixels)"},"height":{"type":"integer","description":"Height (physical pixels)"}},"required":["target","width","height"]}""";
+  private const string WindowSetBoundsInputSchemaJson = """{"type":"object","properties":{"target":""" + WindowTargetSchema + ""","x":{"type":"integer"},"y":{"type":"integer"},"width":{"type":"integer"},"height":{"type":"integer"}},"required":["target","x","y","width","height"]}""";
+  private const string WindowStateInputSchemaJson = """{"type":"object","properties":{"target":""" + WindowTargetSchema + """},"required":["target"]}""";
+  private const string WindowCloseInputSchemaJson = """{"type":"object","properties":{"target":""" + WindowTargetSchema + ""","waitMs":{"type":"integer","default":2000,"description":"Max ms to wait for window to close; poll IsWindow until gone or elapsed."}},"required":["target"]}""";
+  private const string WindowActionOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"evidence":{"type":"object","description":"For close: {closed:bool}; others empty."}},"required":["ok","traceId"]}""";
 }
 

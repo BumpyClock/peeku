@@ -36,6 +36,8 @@ public sealed class CliCommandTreeParityTests
     "click", "invoke", "set-value", "type", "scroll", "hotkey", "press",
     "observe", "wait", "watch", "batch",
     "diff",
+    "window", "window move", "window resize", "window set-bounds",
+    "window minimize", "window maximize", "window restore", "window close",
   };
 
   [Fact]

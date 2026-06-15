@@ -449,6 +449,77 @@ internal static class BatchRunner
           return (res.Ok, res, res.Error);
         }
 
+        case "peeku_window_move":
+        {
+          if (!BatchArgs.TryReadTarget(args, out var target, out var targetError))
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+          var x = BatchArgs.ReadInt(args, "x");
+          var y = BatchArgs.ReadInt(args, "y");
+          if (x is null || y is null)
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "x and y are required."));
+          var res = await client.WindowMoveAsync(new WindowMoveRequest(target, x.Value, y.Value), ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_window_resize":
+        {
+          if (!BatchArgs.TryReadTarget(args, out var target, out var targetError))
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+          var width = BatchArgs.ReadInt(args, "width");
+          var height = BatchArgs.ReadInt(args, "height");
+          if (width is null || height is null)
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "width and height are required."));
+          var res = await client.WindowResizeAsync(new WindowResizeRequest(target, width.Value, height.Value), ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_window_set_bounds":
+        {
+          if (!BatchArgs.TryReadTarget(args, out var target, out var targetError))
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+          var x = BatchArgs.ReadInt(args, "x");
+          var y = BatchArgs.ReadInt(args, "y");
+          var width = BatchArgs.ReadInt(args, "width");
+          var height = BatchArgs.ReadInt(args, "height");
+          if (x is null || y is null || width is null || height is null)
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "x, y, width, and height are required."));
+          var res = await client.WindowSetBoundsAsync(new WindowBoundsRequest(target, x.Value, y.Value, width.Value, height.Value), ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_window_minimize":
+        {
+          if (!BatchArgs.TryReadTarget(args, out var target, out var targetError))
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+          var res = await client.WindowMinimizeAsync(new WindowStateRequest(target), ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_window_maximize":
+        {
+          if (!BatchArgs.TryReadTarget(args, out var target, out var targetError))
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+          var res = await client.WindowMaximizeAsync(new WindowStateRequest(target), ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_window_restore":
+        {
+          if (!BatchArgs.TryReadTarget(args, out var target, out var targetError))
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+          var res = await client.WindowRestoreAsync(new WindowStateRequest(target), ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_window_close":
+        {
+          if (!BatchArgs.TryReadTarget(args, out var target, out var targetError))
+            return (false, null, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
+          var waitMs = BatchArgs.ReadInt(args, "waitMs") ?? 2000;
+          var res = await client.WindowCloseAsync(new WindowCloseRequest(target, waitMs), ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
         default:
           return (false, null, PeekuErrors.Create(PeekuErrorCode.NotSupported, "Unknown tool.", new { tool }));
       }

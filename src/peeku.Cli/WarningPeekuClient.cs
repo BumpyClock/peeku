@@ -79,6 +79,21 @@ internal sealed class WarningPeekuClient : IPeekuClient
   public async Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default)
     => WithWarning(await _inner.ElementAtPointAsync(req, ct).ConfigureAwait(false));
 
+  public async Task<WindowActionResult> WindowMoveAsync(WindowMoveRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.WindowMoveAsync(req, ct).ConfigureAwait(false));
+  public async Task<WindowActionResult> WindowResizeAsync(WindowResizeRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.WindowResizeAsync(req, ct).ConfigureAwait(false));
+  public async Task<WindowActionResult> WindowSetBoundsAsync(WindowBoundsRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.WindowSetBoundsAsync(req, ct).ConfigureAwait(false));
+  public async Task<WindowActionResult> WindowMinimizeAsync(WindowStateRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.WindowMinimizeAsync(req, ct).ConfigureAwait(false));
+  public async Task<WindowActionResult> WindowMaximizeAsync(WindowStateRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.WindowMaximizeAsync(req, ct).ConfigureAwait(false));
+  public async Task<WindowActionResult> WindowRestoreAsync(WindowStateRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.WindowRestoreAsync(req, ct).ConfigureAwait(false));
+  public async Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.WindowCloseAsync(req, ct).ConfigureAwait(false));
+
   private T WithWarning<T>(T result) where T : ResultBase
   {
     var existing = result.Meta.Warning ?? "";
