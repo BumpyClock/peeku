@@ -1,0 +1,34 @@
+<Project>
+  <!-- Provenance: shared version for all projects; SDK appends +<sha> to InformationalVersion -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+  </PropertyGroup>
+
+  <!-- Publish tuning, gated so a plain `dotnet build` is completely unaffected.
+       Activate by passing -p:PublishProfileTuning=true (explicit) or via `dotnet publish`
+       which sets _IsPublishing automatically. -->
+  <PropertyGroup Condition="'$(PublishProfileTuning)' == 'true' or '$(_IsPublishing)' == 'true'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Non-optional: Vortice D3D11/DXGI native binaries + FlaUI's UIA interop must
+         self-extract at runtime under PublishSingleFile. R2R does NOT cover these native
+         deps — it only AOT-compiles managed IL. Failure to self-extract surfaces only at
+         runtime on the capture path, never at publish. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Safe for this codebase: no culture-sensitive casing/collation/formatting for
+         correctness. The one culture-sensitive call (hex hwnd parse) explicitly uses
+         CultureInfo.InvariantCulture. WGC/WinRT activation and Vortice D3D11/DXGI COM
+         interop are culture-independent. Drops ICU/culture data from the self-contained
+         bundle; does not affect WinRT activation or COM marshalling. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Keep tiered + QuickJit + TieredPGO defaults; do NOT disable -->
+    <TieredCompilation>true</TieredCompilation>
+    <TieredPGO>true</TieredPGO>
+    <!-- Explicit non-goal: FlaUI/UIA3/COM/WinRT interop is reflection- and COM-heavy
+         and trim-unsafe. NativeAOT is deferred for the same reason. R2R + self-contained
+         captures most cold-start win without the trimming risk. -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+</Project>
