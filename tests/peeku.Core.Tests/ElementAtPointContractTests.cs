@@ -204,6 +204,12 @@ file sealed class ThrowingFakeClientForHitTest : IPeekuClient
     => Throw<WaitResult>();
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => Throw<BatchResult>();
+  public Task<FocusedWindowResult> WindowFocusAsync(WindowFocusRequest req, CancellationToken ct = default)
+    => Throw<FocusedWindowResult>();
+  public Task<ActionResult> PressAsync(PressRequest req, CancellationToken ct = default)
+    => Throw<ActionResult>();
+  public Task<DiffResult> DiffAsync(DiffRequest req, CancellationToken ct = default)
+    => Throw<DiffResult>();
   public Task<ElementAtPointResult> ElementAtPointAsync(ElementAtPointRequest req, CancellationToken ct = default)
     => Throw<ElementAtPointResult>();
 
