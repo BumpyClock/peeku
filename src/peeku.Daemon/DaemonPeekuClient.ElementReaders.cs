@@ -161,8 +161,11 @@ public sealed partial class DaemonPeekuClient
 
     if (element.Patterns.Value.IsSupported)
     {
-      d["value"] = Safe(() => element.Patterns.Value.Pattern.Value);
-      d["isReadOnly"] = Safe(() => element.Patterns.Value.Pattern.IsReadOnly);
+      // .ValueOrDefault unwraps FlaUI's AutomationProperty<T>; without it the wrapper object
+      // itself was stored (and serialized) instead of the string/bool. Matches the property
+      // reads above. (Same class of bug as the UiaPatternState fix.)
+      d["value"] = Safe(() => element.Patterns.Value.Pattern.Value.ValueOrDefault);
+      d["isReadOnly"] = Safe(() => element.Patterns.Value.Pattern.IsReadOnly.ValueOrDefault);
     }
 
     return d;
