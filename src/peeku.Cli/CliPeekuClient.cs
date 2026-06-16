@@ -15,32 +15,62 @@ internal sealed class CliPeekuClient : global::peeku.IPeekuClient
   // command --timeout (plan §6). PID-liveness already filters dead/mismatched markers.
   private static readonly TimeSpan ProbeBudget = TimeSpan.FromMilliseconds(300);
 
+  // Bounded wait for a freshly auto-spawned daemon to answer. If it doesn't come up in time the
+  // daemon is still starting in the background — this call uses in-proc and the next call finds it
+  // warm via the persisted marker. Kept short so a cold spawn only mildly delays the first command.
+  private static readonly TimeSpan SpawnBudget = TimeSpan.FromMilliseconds(2500);
+
   internal static global::peeku.IPeekuClient CreateDefault()
   {
-    if (!DaemonMarker.TryLoad(out var marker))
+    var ctx = CliContextAccessor.Current;
+
+    // Explicit opt-out (--no-daemon / PEEKU_NO_DAEMON): pure in-proc, never touch or spawn a daemon.
+    if (ctx.NoDaemon || DaemonLifecycle.IsDisabledByEnv())
     {
       return new CliPeekuClient(new global::peeku.WindowsClient(), "");
     }
 
-    // PID-liveness before the pipe ping: if the daemon process is dead or its PID was
-    // recycled to an unrelated process, drop the stale marker and skip the round-trip.
-    if (!marker.IsAlive())
+    // 1. Reuse a live, reachable daemon if one exists.
+    if (DaemonMarker.TryLoad(out var marker))
     {
+      // PID-liveness before the pipe ping: if the daemon process is dead or its PID was
+      // recycled to an unrelated process, drop the stale marker and fall through to spawn.
+      if (marker.IsAlive())
+      {
+        var rpc = new DaemonJsonRpcClient(marker.PipeName, ProbeBudget);
+        using var cts = new CancellationTokenSource(ProbeBudget);
+        if (rpc.TryPingAsync(cts.Token).GetAwaiter().GetResult())
+        {
+          return new CliPeekuClient(new DaemonPeekuClient(rpc), "");
+        }
+
+        // Process is alive but unresponsive — do NOT spawn a competing daemon over it.
+        var warning = "Daemon unreachable; fell back to in-proc";
+        var fallback = new WarningPeekuClient(new global::peeku.WindowsClient(), warning);
+        return new CliPeekuClient(fallback, warning);
+      }
+
       DaemonMarker.TryDeleteStale();
-      return new CliPeekuClient(new global::peeku.WindowsClient(), "");
     }
 
-    var rpc = new DaemonJsonRpcClient(marker.PipeName, ProbeBudget);
-    using var cts = new CancellationTokenSource(ProbeBudget);
-    var pingOk = rpc.TryPingAsync(cts.Token).GetAwaiter().GetResult();
-    if (pingOk)
+    // 2. No live daemon. Auto-spawn the warm path — but only when the real executable is present
+    //    (else the dotnet-run fallback would build-and-run on every call). Skip silently otherwise.
+    if (DaemonLifecycle.CanAutoSpawn())
     {
-      return new CliPeekuClient(new DaemonPeekuClient(rpc), "");
+      var connected = DaemonLifecycle.TrySpawnAndConnect(SpawnBudget);
+      if (connected is not null)
+      {
+        return new CliPeekuClient(new DaemonPeekuClient(connected), "");
+      }
+
+      // Spawn issued but not reachable within budget: still coming up. Use in-proc for this call;
+      // the persisted marker means the next invocation connects to the now-warm daemon.
+      var spawnWarn = "Daemon starting; used in-proc for this call";
+      var spawnFallback = new WarningPeekuClient(new global::peeku.WindowsClient(), spawnWarn);
+      return new CliPeekuClient(spawnFallback, spawnWarn);
     }
 
-    var warning = "Daemon unreachable; fell back to in-proc";
-    var fallback = new WarningPeekuClient(new global::peeku.WindowsClient(), warning);
-    return new CliPeekuClient(fallback, warning);
+    return new CliPeekuClient(new global::peeku.WindowsClient(), "");
   }
 
   public Task<global::peeku.DoctorResult> DoctorAsync(global::peeku.DoctorRequest req, CancellationToken ct = default)

@@ -12,7 +12,8 @@ internal sealed record CliContext(
   OutputFormat Format,
   TimeSpan Timeout,
   string? TraceId,
-  ILogger Logger);
+  ILogger Logger,
+  bool NoDaemon = false);
 
 internal static class CliContextAccessor
 {

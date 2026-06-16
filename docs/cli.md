@@ -30,30 +30,39 @@ peeku see --app notepad --depth 3
 Use before/after subcommands.
 
 - `--format json|pretty` (default `json`)
-- `--timeout 00:00:10` (default 10s; applied per command)
+- `--timeout <ms>` — bare integer = **milliseconds** (e.g. `5000`); also `500ms` / `5s` / `2m` / `hh:mm:ss` (default 10s)
 - `--log-level trace|debug|info|warn|error` (default `info`)
 - `--log-file <path>` (optional)
 - `--trace-id <id>` (optional; else generated)
 - `--profile <name>` (reserved; no-op for now)
-- `--server` (run daemon server in foreground)
-- `--daemon` (spawn/stop daemon; see below)
-- `--stop` (stop daemon; requires `--daemon`)
+- `--no-daemon` — never use or spawn the daemon; run in-process (also via `PEEKU_NO_DAEMON=1`)
 
 ## Daemon (fast mode)
 
+A background daemon keeps a warm UIA host and a shared element cache, so a `uia snapshot` in one
+CLI process and a follow-up `element get --ref <refId>` / `click` in a **separate** process resolve
+against the same session. It is also faster (no per-call UIA cold start).
+
+**Auto-spawn (default).** Normal commands connect to a running daemon automatically; if none is
+running, the CLI spawns one in the background, then uses it. The spawning call may briefly fall back
+to in-process while the daemon comes up (`meta.warning: "Daemon starting; used in-proc for this
+call"`) — the next call connects to the now-warm daemon. Auto-spawn only triggers when the real
+`peeku-daemon` executable sits next to the CLI (a dev `dotnet run` layout stays in-process).
+
+**Opt out.** `--no-daemon` (or `PEEKU_NO_DAEMON=1`) forces the pure in-process path: it neither uses
+nor spawns a daemon. The MCP server never auto-spawns.
+
+**Manual lifecycle** (the `daemon` subcommand):
+
 ```powershell
-peeku --server
-peeku --daemon
-peeku --daemon --stop
+peeku daemon serve     # run server in the foreground (blocks until Ctrl-C)
+peeku daemon start     # start background daemon (idempotent)
+peeku daemon status    # query state (always exits 0)
+peeku daemon stop      # stop the running daemon
 ```
 
-- `--daemon` spawns background daemon and writes `%LOCALAPPDATA%\peeku\daemon.json`
-- When the marker exists, normal CLI commands connect to daemon by default
-- `watch` requires a running daemon (`peeku --daemon`)
-- Lifecycle:
-  - foreground server: `peeku --server`
-  - background daemon: `peeku --daemon`
-  - manual stop: `peeku --daemon --stop`
+- `daemon start` spawns the background daemon and writes `%LOCALAPPDATA%\peeku\daemon.json`
+- `watch` requires a running daemon (auto-spawned, or `peeku daemon start`)
 
 ## Commands (implemented)
 

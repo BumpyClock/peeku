@@ -1,6 +1,5 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
-using System.Reflection;
 using peeku;
 
 namespace peeku.Cli;
@@ -59,12 +58,8 @@ internal static class CliDaemonCommands
 
       try
       {
-        var pipeName = DefaultPipeName();
-        var launcher = new DaemonProcessLauncher(Directory.GetCurrentDirectory());
-        var process = launcher.StartBackground(pipeName);
-        var marker = new DaemonMarker(pipeName, process.Id, DateTimeOffset.UtcNow, "1", BuildVersion());
-        marker.Save();
-        CliOutput.Write(new DaemonStartResult(Ok: true, Pid: process.Id, PipeName: pipeName), ctx.Format);
+        var marker = DaemonLifecycle.Spawn();
+        CliOutput.Write(new DaemonStartResult(Ok: true, Pid: marker.Pid, PipeName: marker.PipeName), ctx.Format);
         return ExitCodes.Success;
       }
       catch (Exception ex)
@@ -197,34 +192,11 @@ internal static class CliDaemonCommands
     cmd.SetAction(async (ParseResult _, CancellationToken ct) =>
     {
       var runner = new DaemonServerRunner();
-      var pipeName = DefaultPipeName();
+      var pipeName = DaemonLifecycle.DefaultPipeName();
       return await runner.RunAsync(pipeName, ct).ConfigureAwait(false);
     });
 
     return cmd;
-  }
-
-  // ── helpers ───────────────────────────────────────────────────────────────
-
-  private static string DefaultPipeName()
-  {
-    var user = Environment.UserName;
-    var safeUser = string.IsNullOrWhiteSpace(user) ? "user" : user.Trim();
-    return $"peeku.{safeUser}.v1";
-  }
-
-  private static string BuildVersion()
-  {
-    var info = Assembly.GetExecutingAssembly()
-      .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-      ?.InformationalVersion;
-    if (!string.IsNullOrWhiteSpace(info))
-    {
-      return info.Trim();
-    }
-
-    var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString();
-    return string.IsNullOrWhiteSpace(version) ? "0.0.0" : version;
   }
 
   // ── result records ────────────────────────────────────────────────────────

@@ -395,7 +395,7 @@ Grouped by impact × risk. Each task tagged **[S/M/L]** effort and **[breaking]*
 ### P1 — high value, moderate risk
 
 - [ ] **`daemon start|stop|status|serve` subcommand;** remove the three recursive global booleans + the dispatch block; each writes a JSON envelope; update `watch` error strings and `docs/cli.md`. **[M] [breaking]**
-- [ ] **Daemon auto-spawn** (opt-in-by-default; `PEEKU_NO_DAEMON`/`--no-daemon`; CLI-only, not MCP) + idle self-reap. **[M]**
+- [x] **Daemon auto-spawn** (opt-in-by-default; `PEEKU_NO_DAEMON`/`--no-daemon`; CLI-only, not MCP). Shared `DaemonLifecycle` helper (spawn/connect/gate) so manual + auto don't drift; gated on the real `peeku-daemon.exe` (never the `dotnet run` fallback); detached `UseShellExecute=true` launch so the daemon doesn't inherit the CLI's stdout handle and hang piped output. _Idle self-reap still TODO (see below)._ **[M]**
 - [ ] **Async client factory** `CreateDefaultAsync(ct)`; fix both sync-over-async pings; thread the invocation token. **[M]**
 - [ ] **Crash-only daemon start:** atomic marker write (`File.Move`), reap dead/hung PID before respawn. **[M]**
 - [ ] **Verify & harden Ctrl-C** (corrected from §0 — NOT a "fix"): live smoke-test `watch`/`observe` on SCL 2.0.2; ensure the in-flight daemon `FindAsync` inside `watch` resolves within the ~2s graceful window; document the `Canceled` exit code (8) + streaming Ctrl-C contract. Optionally pass the invocation token instead of `CancellationToken.None` as tidy-up. **[S]**

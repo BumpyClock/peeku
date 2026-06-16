@@ -80,12 +80,19 @@ internal static class Program
     var profileOpt = new Option<string?>("--profile") { Description = "Optional profile name (reserved)" };
     profileOpt.Recursive = true;
 
+    var noDaemonOpt = new Option<bool>("--no-daemon")
+    {
+      Description = "Never use or spawn the background daemon; run in-process (also via PEEKU_NO_DAEMON=1)",
+    };
+    noDaemonOpt.Recursive = true;
+
     root.Add(formatOpt);
     root.Add(timeoutOpt);
     root.Add(logLevelOpt);
     root.Add(logFileOpt);
     root.Add(traceIdOpt);
     root.Add(profileOpt);
+    root.Add(noDaemonOpt);
 
     CliCommandTree.AddCommands(root);
 
@@ -110,8 +117,10 @@ internal static class Program
       _ => LogEventLevel.Information,
     };
 
+    var noDaemon = parse.GetValue(noDaemonOpt);
+
     Log.Logger = CreateLogger(level, format, traceId, parse.GetValue(logFileOpt));
-    CliContextAccessor.Set(new CliContext(format, timeout, traceId, Log.Logger));
+    CliContextAccessor.Set(new CliContext(format, timeout, traceId, Log.Logger, noDaemon));
 
     try
     {

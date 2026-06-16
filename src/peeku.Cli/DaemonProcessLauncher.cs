@@ -39,10 +39,26 @@ internal sealed class DaemonProcessLauncher
       FileName = fileName,
       Arguments = args,
       WorkingDirectory = _workingDirectory,
-      UseShellExecute = false,
-      CreateNoWindow = background,
-      WindowStyle = background ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal,
     };
+
+    if (background)
+    {
+      // CRITICAL for auto-spawn: launch detached so the long-lived daemon does NOT inherit the
+      // launching CLI's handles. With UseShellExecute=false, .NET starts the child with
+      // bInheritHandles=TRUE and duplicates EVERY inheritable handle into it — including the pipe
+      // behind `peeku ... | jq`. The daemon would then hold that pipe's write end open and the
+      // reader would never see EOF (HANG until the daemon dies). ShellExecuteEx
+      // (UseShellExecute=true) launches without inheriting handles, so the CLI's stdout closes
+      // normally on exit. WindowStyle=Hidden keeps the console subsystem daemon off-screen.
+      info.UseShellExecute = true;
+      info.WindowStyle = ProcessWindowStyle.Hidden;
+    }
+    else
+    {
+      // Foreground `serve`: keep the user's console attached so they see logs and Ctrl-C works.
+      info.UseShellExecute = false;
+      info.WindowStyle = ProcessWindowStyle.Normal;
+    }
 
     var process = Process.Start(info);
     if (process is null)
@@ -55,8 +71,7 @@ internal sealed class DaemonProcessLauncher
 
   private static (string FileName, string Arguments) ResolveCommand(string pipeName)
   {
-    var daemonExe = FindDaemonExecutable();
-    if (daemonExe.Length > 0)
+    if (TryGetDaemonExecutable(out var daemonExe))
     {
       return (daemonExe, $"--pipeName \"{pipeName}\"");
     }
@@ -64,21 +79,31 @@ internal sealed class DaemonProcessLauncher
     return ("dotnet", $"run --project src/peeku.Daemon -c Release -- --pipeName \"{pipeName}\"");
   }
 
-  private static string FindDaemonExecutable()
+  /// <summary>
+  /// True when the real <c>peeku-daemon</c> executable sits next to the CLI. Auto-spawn gates on
+  /// this: the <c>dotnet run</c> fallback is acceptable for an explicit <c>daemon start</c>, but
+  /// triggering a build-and-run on every CLI call would be a disaster, so auto-spawn must skip it.
+  /// </summary>
+  internal static bool HasDaemonExecutable() => TryGetDaemonExecutable(out _);
+
+  private static bool TryGetDaemonExecutable(out string path)
   {
     var baseDir = AppContext.BaseDirectory;
     var exePath = Path.Combine(baseDir, "peeku-daemon.exe");
     if (File.Exists(exePath))
     {
-      return exePath;
+      path = exePath;
+      return true;
     }
 
     var altPath = Path.Combine(baseDir, "peeku-daemon");
     if (File.Exists(altPath))
     {
-      return altPath;
+      path = altPath;
+      return true;
     }
 
-    return "";
+    path = "";
+    return false;
   }
 }
