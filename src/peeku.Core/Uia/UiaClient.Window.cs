@@ -31,4 +31,10 @@ public sealed partial class UiaClient
 
   public Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default)
     => AppLifecycle.QuitAsync(req, ct);
+
+  public Task<AppRelaunchResult> AppRelaunchAsync(AppRelaunchRequest req, CancellationToken ct = default)
+    => AppLifecycle.RelaunchAsync(req, ct);
+
+  public Task<AppListResult> AppListAsync(AppListRequest req, CancellationToken ct = default)
+    => AppLifecycle.ListAsync(req, ct);
 }

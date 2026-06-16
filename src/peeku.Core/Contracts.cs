@@ -45,6 +45,8 @@ public interface IPeekuClient
   // App lifecycle (S4)
   Task<AppLaunchResult> AppLaunchAsync(AppLaunchRequest req, CancellationToken ct = default);
   Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default);
+  Task<AppRelaunchResult> AppRelaunchAsync(AppRelaunchRequest req, CancellationToken ct = default);
+  Task<AppListResult> AppListAsync(AppListRequest req, CancellationToken ct = default);
 }
 
 public abstract record Target
@@ -448,6 +450,35 @@ public record AppQuitResult(
   ResultMeta Meta,
   int Closed = 0,
   int Killed = 0,
+  PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+
+public record AppRelaunchRequest(
+  int? ProcessId = null,
+  string? ProcessName = null,
+  bool WaitUntilReady = false,
+  int WaitMs = 5000,
+  bool NoFocus = false);
+
+public record AppRelaunchResult(
+  bool Ok,
+  ResultMeta Meta,
+  int? ProcessId = null,
+  string? ExecutablePath = null,
+  WindowInfo? Window = null,
+  PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
+
+public record AppListRequest(int Limit = 100);
+
+public record AppInfo(
+  int ProcessId,
+  string ProcessName,
+  string? Title = null,
+  bool Active = false);
+
+public record AppListResult(
+  bool Ok,
+  ResultMeta Meta,
+  IReadOnlyList<AppInfo> Apps,
   PeekuError? Error = null) : ResultBase(Ok, Meta, Error);
 
 // ── Window management (S3) ────────────────────────────────────────────────────

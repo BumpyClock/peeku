@@ -551,6 +551,26 @@ internal static class BatchRunner
           return (res.Ok, res, res.Error);
         }
 
+        case "peeku_app_relaunch":
+        {
+          var req = new AppRelaunchRequest(
+            ProcessId: BatchArgs.ReadInt(args, "processId"),
+            ProcessName: BatchArgs.ReadString(args, "processName"),
+            WaitUntilReady: BatchArgs.ReadBool(args, "waitUntilReady") ?? false,
+            WaitMs: BatchArgs.ReadInt(args, "waitMs") ?? 5000,
+            NoFocus: BatchArgs.ReadBool(args, "noFocus") ?? false);
+          var res = await client.AppRelaunchAsync(req, ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
+        case "peeku_app_list":
+        {
+          var req = new AppListRequest(
+            Limit: BatchArgs.ReadInt(args, "limit") ?? 100);
+          var res = await client.AppListAsync(req, ct).ConfigureAwait(false);
+          return (res.Ok, res, res.Error);
+        }
+
         default:
           return (false, null, PeekuErrors.Create(PeekuErrorCode.NotSupported, "Unknown tool.", new { tool }));
       }

@@ -8,9 +8,11 @@ internal static class CliAppCommands
 {
   internal static Command CreateAppCommand()
   {
-    var app = new Command("app", "App lifecycle: launch and quit applications");
+    var app = new Command("app", "App lifecycle: launch, quit, relaunch, and list applications");
     app.Add(CreateLaunchCommand());
     app.Add(CreateQuitCommand());
+    app.Add(CreateRelaunchCommand());
+    app.Add(CreateListCommand());
     return app;
   }
 
@@ -127,6 +129,87 @@ internal static class CliAppCommands
         WaitMs: parse.GetValue(waitMsOpt));
 
       var res = await client.AppQuitAsync(req, scope.Token).ConfigureAwait(false);
+      CliOutput.Write(res, ctx.Format);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
+    });
+
+    return cmd;
+  }
+
+  private static Command CreateRelaunchCommand()
+  {
+    var cmd = new Command("relaunch", "Relaunch a running application by pid or process name");
+
+    var processIdOpt = new Option<int?>("--pid") { Description = "Process ID of the running process to relaunch" };
+    var processNameOpt = new Option<string?>("--processName") { Description = "Process name to relaunch" };
+
+    var waitUntilReadyOpt = new Option<bool>("--waitUntilReady")
+    {
+      Description = "Wait for input-idle and a top-level window before returning"
+    };
+    waitUntilReadyOpt.DefaultValueFactory = _ => false;
+
+    var waitMsOpt = new Option<int>("--waitMs")
+    {
+      Description = "Max ms for both graceful-quit grace and launch readiness (default 5000)"
+    };
+    waitMsOpt.DefaultValueFactory = _ => 5000;
+
+    var noFocusOpt = new Option<bool>("--noFocus")
+    {
+      Description = "Skip post-launch BringToForeground activation"
+    };
+    noFocusOpt.DefaultValueFactory = _ => false;
+
+    cmd.Add(processIdOpt);
+    cmd.Add(processNameOpt);
+    cmd.Add(waitUntilReadyOpt);
+    cmd.Add(waitMsOpt);
+    cmd.Add(noFocusOpt);
+
+    cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
+    {
+      var ctx = CliContextAccessor.Current;
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
+
+      var client = CliPeekuClient.CreateDefault();
+      var req = new AppRelaunchRequest(
+        ProcessId: parse.GetValue(processIdOpt),
+        ProcessName: parse.GetValue(processNameOpt),
+        WaitUntilReady: parse.GetValue(waitUntilReadyOpt),
+        WaitMs: parse.GetValue(waitMsOpt),
+        NoFocus: parse.GetValue(noFocusOpt));
+
+      var res = await client.AppRelaunchAsync(req, scope.Token).ConfigureAwait(false);
+      CliOutput.Write(res, ctx.Format);
+      return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
+    });
+
+    return cmd;
+  }
+
+  private static Command CreateListCommand()
+  {
+    var cmd = new Command("list", "List distinct applications that own at least one visible top-level window");
+
+    var limitOpt = new Option<int>("--limit")
+    {
+      Description = "Maximum number of distinct apps to return (default 100)"
+    };
+    limitOpt.DefaultValueFactory = _ => 100;
+
+    cmd.Add(limitOpt);
+
+    cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
+    {
+      var ctx = CliContextAccessor.Current;
+      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
+
+      var client = CliPeekuClient.CreateDefault();
+      var req = new AppListRequest(
+        Limit: parse.GetValue(limitOpt));
+
+      var res = await client.AppListAsync(req, scope.Token).ConfigureAwait(false);
       CliOutput.Write(res, ctx.Format);
       return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);
     });

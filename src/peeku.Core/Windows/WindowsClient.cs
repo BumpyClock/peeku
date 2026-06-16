@@ -247,6 +247,12 @@ public sealed class WindowsClient : IPeekuClient
   public Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default)
     => AppLifecycle.QuitAsync(req, ct);
 
+  public Task<AppRelaunchResult> AppRelaunchAsync(AppRelaunchRequest req, CancellationToken ct = default)
+    => AppLifecycle.RelaunchAsync(req, ct);
+
+  public Task<AppListResult> AppListAsync(AppListRequest req, CancellationToken ct = default)
+    => AppLifecycle.ListAsync(req, ct);
+
   private static string? CombineWarnings(string? a, string? b)
   {
     if (string.IsNullOrWhiteSpace(a))

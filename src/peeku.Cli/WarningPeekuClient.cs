@@ -98,6 +98,10 @@ internal sealed class WarningPeekuClient : IPeekuClient
     => WithWarning(await _inner.AppLaunchAsync(req, ct).ConfigureAwait(false));
   public async Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default)
     => WithWarning(await _inner.AppQuitAsync(req, ct).ConfigureAwait(false));
+  public async Task<AppRelaunchResult> AppRelaunchAsync(AppRelaunchRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.AppRelaunchAsync(req, ct).ConfigureAwait(false));
+  public async Task<AppListResult> AppListAsync(AppListRequest req, CancellationToken ct = default)
+    => WithWarning(await _inner.AppListAsync(req, ct).ConfigureAwait(false));
 
   private T WithWarning<T>(T result) where T : ResultBase
   {

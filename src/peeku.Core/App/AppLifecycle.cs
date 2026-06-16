@@ -143,6 +143,158 @@ internal static class AppLifecycle
     }
   }
 
+  // ── Relaunch ─────────────────────────────────────────────────────────────────
+
+  internal static async Task<AppRelaunchResult> RelaunchAsync(AppRelaunchRequest req, CancellationToken ct)
+  {
+    var scope = Results.Start();
+    try
+    {
+      ct.ThrowIfCancellationRequested();
+
+      if (req is null)
+      {
+        return RelaunchFail(scope, PeekuErrorCode.InvalidArgument, "Request is required.");
+      }
+
+      if (req.ProcessId is null && string.IsNullOrWhiteSpace(req.ProcessName))
+      {
+        return RelaunchFail(scope, PeekuErrorCode.InvalidArgument,
+          "Provide processId or processName.");
+      }
+
+      Process? target = null;
+      if (req.ProcessId is not null)
+      {
+        try
+        {
+          target = Process.GetProcessById(req.ProcessId.Value);
+        }
+        catch (ArgumentException)
+        {
+          return RelaunchFail(scope, PeekuErrorCode.NotFound,
+            $"No process found with pid {req.ProcessId.Value}.");
+        }
+      }
+      else
+      {
+        var candidates = Process.GetProcessesByName(req.ProcessName!);
+        if (candidates.Length == 0)
+        {
+          return RelaunchFail(scope, PeekuErrorCode.NotFound,
+            $"No process found with name '{req.ProcessName}'.");
+        }
+
+        target = candidates[0];
+        foreach (var extra in candidates.Skip(1))
+        {
+          extra.Dispose();
+        }
+      }
+
+      string? executablePath;
+      try
+      {
+        executablePath = target.MainModule?.FileName;
+      }
+      catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+      {
+        target.Dispose();
+        return RelaunchFail(scope, PeekuErrorCode.InvalidArgument,
+          "cannot resolve executable path for relaunch; process may be elevated or packaged");
+      }
+
+      if (string.IsNullOrWhiteSpace(executablePath))
+      {
+        target.Dispose();
+        return RelaunchFail(scope, PeekuErrorCode.InvalidArgument,
+          "cannot resolve executable path for relaunch; process may be elevated or packaged");
+      }
+
+      using (target)
+      {
+        await QuitProcessAsync(target, force: false, req.WaitMs, ct).ConfigureAwait(false);
+      }
+
+      var launchReq = new AppLaunchRequest(
+        Target: executablePath,
+        WaitUntilReady: req.WaitUntilReady,
+        WaitMs: req.WaitMs,
+        NoFocus: req.NoFocus);
+
+      var launched = await LaunchAsync(launchReq, ct).ConfigureAwait(false);
+      if (!launched.Ok)
+      {
+        return new AppRelaunchResult(
+          Ok: false,
+          Meta: scope.Meta(),
+          ExecutablePath: executablePath,
+          Error: launched.Error);
+      }
+
+      return new AppRelaunchResult(
+        Ok: true,
+        Meta: scope.Meta(),
+        ProcessId: launched.ProcessId,
+        ExecutablePath: executablePath,
+        Window: launched.Window);
+    }
+    catch (OperationCanceledException)
+    {
+      return RelaunchFail(scope, PeekuErrorCode.Canceled, "Operation cancelled.");
+    }
+    catch (Exception ex)
+    {
+      return RelaunchFail(scope, PeekuErrorCode.Internal, "App relaunch failed.",
+        new { exception = ex.GetType().FullName, ex.Message, ex.HResult });
+    }
+  }
+
+  // ── List ─────────────────────────────────────────────────────────────────────
+
+  internal static Task<AppListResult> ListAsync(AppListRequest req, CancellationToken ct)
+  {
+    var scope = Results.Start();
+    try
+    {
+      ct.ThrowIfCancellationRequested();
+
+      var limit = req?.Limit ?? 100;
+      var foregroundPid = Win32Windows.GetForegroundProcessId();
+
+      // Pull all visible top-level windows (use a large cap so grouping sees everything).
+      var allWindows = Win32Windows.ListWindows(new WindowsListRequest(Limit: 10000), ct);
+
+      // Group by pid; pick representative window (prefer first with non-empty title, else first).
+      var grouped = allWindows
+        .GroupBy(w => w.ProcessId)
+        .Select(g =>
+        {
+          var rep = g.FirstOrDefault(w => !string.IsNullOrWhiteSpace(w.Title)) ?? g.First();
+          var pid = g.Key;
+          string processName = rep.ProcessName ?? "";
+          return new AppInfo(
+            ProcessId: pid,
+            ProcessName: processName,
+            Title: rep.Title,
+            Active: pid == foregroundPid);
+        })
+        .Take(limit)
+        .ToList();
+
+      return Task.FromResult(new AppListResult(Ok: true, Meta: scope.Meta(), Apps: grouped));
+    }
+    catch (OperationCanceledException)
+    {
+      return Task.FromResult(ListFail(scope, PeekuErrorCode.Canceled, "Operation cancelled."));
+    }
+    catch (Exception ex)
+    {
+      return Task.FromResult(ListFail(scope, PeekuErrorCode.Internal, "App list failed.",
+        new { exception = ex.GetType().FullName, ex.Message, ex.HResult }));
+    }
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   private static ProcessStartInfo BuildProcessStartInfo(string target, string? args)
@@ -309,4 +461,10 @@ internal static class AppLifecycle
 
   private static AppQuitResult QuitFail(ResultScope scope, PeekuErrorCode code, string message, object? details = null)
     => new(Ok: false, Meta: scope.Meta(), Error: PeekuErrors.Create(code, message, details));
+
+  private static AppRelaunchResult RelaunchFail(ResultScope scope, PeekuErrorCode code, string message, object? details = null)
+    => new(Ok: false, Meta: scope.Meta(), Error: PeekuErrors.Create(code, message, details));
+
+  private static AppListResult ListFail(ResultScope scope, PeekuErrorCode code, string message, object? details = null)
+    => new(Ok: false, Meta: scope.Meta(), Apps: Array.Empty<AppInfo>(), Error: PeekuErrors.Create(code, message, details));
 }

@@ -335,6 +335,18 @@ internal static class Win32Windows
   [DllImport("user32.dll")]
   private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
+  internal static int GetForegroundProcessId()
+  {
+    var hwnd = GetForegroundWindow();
+    if (hwnd == IntPtr.Zero)
+    {
+      return 0;
+    }
+
+    GetWindowThreadProcessId(hwnd, out var pid);
+    return unchecked((int)pid);
+  }
+
   [DllImport("user32.dll")]
   internal static extern IntPtr GetForegroundWindow();
 

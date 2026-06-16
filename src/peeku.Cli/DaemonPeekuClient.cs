@@ -539,6 +539,37 @@ internal sealed class DaemonPeekuClient : IPeekuClient
     return CallResultAsync("peeku_app_quit", args, (meta, error) => new AppQuitResult(false, meta, Error: error), ct);
   }
 
+  public Task<AppRelaunchResult> AppRelaunchAsync(AppRelaunchRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["waitUntilReady"] = req.WaitUntilReady,
+      ["waitMs"] = req.WaitMs,
+      ["noFocus"] = req.NoFocus,
+    };
+    if (req.ProcessId is not null)
+    {
+      args["processId"] = req.ProcessId.Value;
+    }
+
+    if (req.ProcessName is not null)
+    {
+      args["processName"] = req.ProcessName;
+    }
+
+    return CallResultAsync("peeku_app_relaunch", args, (meta, error) => new AppRelaunchResult(false, meta, Error: error), ct);
+  }
+
+  public Task<AppListResult> AppListAsync(AppListRequest req, CancellationToken ct = default)
+  {
+    var args = new Dictionary<string, object?>
+    {
+      ["limit"] = req.Limit,
+    };
+
+    return CallResultAsync("peeku_app_list", args, (meta, error) => new AppListResult(false, meta, Apps: Array.Empty<AppInfo>(), Error: error), ct);
+  }
+
   private async Task<T> CallResultAsync<T>(
     string tool,
     object args,

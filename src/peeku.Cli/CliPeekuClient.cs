@@ -154,6 +154,10 @@ internal sealed class CliPeekuClient : global::peeku.IPeekuClient
     => _inner.AppLaunchAsync(req, ct);
   public Task<global::peeku.AppQuitResult> AppQuitAsync(global::peeku.AppQuitRequest req, CancellationToken ct = default)
     => _inner.AppQuitAsync(req, ct);
+  public Task<global::peeku.AppRelaunchResult> AppRelaunchAsync(global::peeku.AppRelaunchRequest req, CancellationToken ct = default)
+    => _inner.AppRelaunchAsync(req, ct);
+  public Task<global::peeku.AppListResult> AppListAsync(global::peeku.AppListRequest req, CancellationToken ct = default)
+    => _inner.AppListAsync(req, ct);
 }
 
 internal static class CliDoctor

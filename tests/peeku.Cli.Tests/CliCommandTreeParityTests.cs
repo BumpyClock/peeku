@@ -38,7 +38,7 @@ public sealed class CliCommandTreeParityTests
     "diff",
     "window", "window move", "window resize", "window set-bounds",
     "window minimize", "window maximize", "window restore", "window close",
-    "app", "app launch", "app quit",
+    "app", "app launch", "app quit", "app relaunch", "app list",
   };
 
   [Fact]

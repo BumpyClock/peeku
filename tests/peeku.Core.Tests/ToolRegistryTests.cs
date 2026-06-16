@@ -42,6 +42,8 @@ public sealed class ToolRegistryTests
         "peeku_window_close",
         "peeku_app_launch",
         "peeku_app_quit",
+        "peeku_app_relaunch",
+        "peeku_app_list",
       };
 
     var actual = ToolRegistry.All.Select(x => x.Name).ToArray();

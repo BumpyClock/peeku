@@ -52,6 +52,8 @@ public static class ToolRegistry
       Create("peeku_window_close", "Window Close", "Close a window gracefully (WM_CLOSE) and report whether it closed.", WindowCloseInputSchemaJson, WindowActionOutputSchemaJson),
       Create("peeku_app_launch", "App Launch", "Launch an application by path or AUMID.", AppLaunchInputSchemaJson, AppLaunchOutputSchemaJson),
       Create("peeku_app_quit", "App Quit", "Quit an application gracefully (WM_CLOSE loop) then force-kill on timeout.", AppQuitInputSchemaJson, AppQuitOutputSchemaJson),
+      Create("peeku_app_relaunch", "App Relaunch", "Relaunch a running application by pid or process name (captures exe path, quits, re-launches).", AppRelaunchInputSchemaJson, AppRelaunchOutputSchemaJson),
+      Create("peeku_app_list", "App List", "List distinct applications that own at least one visible top-level window.", AppListInputSchemaJson, AppListOutputSchemaJson),
     ];
   }
 
@@ -158,5 +160,11 @@ public static class ToolRegistry
 
   private const string AppQuitInputSchemaJson = """{"type":"object","properties":{"processId":{"type":"integer","description":"PID to quit"},"processName":{"type":"string","description":"Process name to quit (used when processId is absent)"},"force":{"type":"boolean","default":false,"description":"Kill immediately without WM_CLOSE grace period"},"all":{"type":"boolean","default":false,"description":"Quit all processes matching processName"},"except":{"type":"array","items":{"type":"string"},"description":"Process names to skip when using --all"},"waitMs":{"type":"integer","default":3000,"description":"Grace period before force-kill (ms)"}},"required":[]}""";
   private const string AppQuitOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"closed":{"type":"integer","description":"Processes closed gracefully"},"killed":{"type":"integer","description":"Processes force-killed"}},"required":["ok","traceId"]}""";
+
+  private const string AppRelaunchInputSchemaJson = """{"type":"object","properties":{"processId":{"type":"integer","description":"PID of the running process to relaunch"},"processName":{"type":"string","description":"Process name to relaunch (used when processId is absent)"},"waitUntilReady":{"type":"boolean","default":false,"description":"Wait for input-idle and a top-level window before returning"},"waitMs":{"type":"integer","default":5000,"description":"Max ms for both graceful-quit grace and launch readiness"},"noFocus":{"type":"boolean","default":false,"description":"Skip post-launch BringToForeground activation"}},"required":[]}""";
+  private const string AppRelaunchOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"processId":{"type":"integer","description":"PID of the relaunched process"},"executablePath":{"type":"string","description":"Executable path captured before quit"},"window":{"type":"object","description":"First top-level window of the relaunched process, if found"}},"required":["ok","traceId"]}""";
+
+  private const string AppListInputSchemaJson = """{"type":"object","properties":{"limit":{"type":"integer","default":100,"description":"Maximum number of distinct apps to return"}},"required":[]}""";
+  private const string AppListOutputSchemaJson = """{"type":"object","properties":{"ok":{"type":"boolean"},"traceId":{"type":"string"},"apps":{"type":"array","items":{"type":"object","properties":{"processId":{"type":"integer"},"processName":{"type":"string"},"title":{"type":"string"},"active":{"type":"boolean"}},"required":["processId","processName"]}}},"required":["ok","traceId","apps"]}""";
 }
 

@@ -15,4 +15,16 @@ public sealed partial class DaemonPeekuClient
     ThrowIfDisposed();
     return AppLifecycle.QuitAsync(req, ct);
   }
+
+  public Task<AppRelaunchResult> AppRelaunchAsync(AppRelaunchRequest req, CancellationToken ct = default)
+  {
+    ThrowIfDisposed();
+    return AppLifecycle.RelaunchAsync(req, ct);
+  }
+
+  public Task<AppListResult> AppListAsync(AppListRequest req, CancellationToken ct = default)
+  {
+    ThrowIfDisposed();
+    return AppLifecycle.ListAsync(req, ct);
+  }
 }

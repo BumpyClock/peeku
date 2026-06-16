@@ -280,6 +280,103 @@ peeku batch --in ops.json --stop-on-error true
 ]
 ```
 
+### `app launch`
+
+```powershell
+peeku app launch notepad.exe
+peeku app launch "shell:AppsFolder\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App" --waitUntilReady
+peeku app launch mspaint.exe --waitUntilReady --waitMs 8000 --noFocus
+```
+
+- `--waitUntilReady`: wait for the app's main window to appear (default false)
+- `--waitMs <ms>`: readiness poll timeout in milliseconds (default 5000)
+- `--noFocus`: do not bring the launched window to the foreground (default false)
+- Supports both classic Win32 exe paths and packaged app AUMIDs (`shell:AppsFolder\...`)
+
+### `app quit`
+
+```powershell
+peeku app quit --pid 12345
+peeku app quit --processName notepad
+peeku app quit --processName notepad --all
+peeku app quit --processName notepad --force
+```
+
+- `--pid <int>`: target by process ID
+- `--processName <name>`: target by process name (first match; use `--all` for all matches)
+- `--all`: quit all processes matching `--processName`
+- `--force`: skip graceful WM_CLOSE and terminate immediately
+- `--waitMs <ms>`: graceful-close poll timeout before killing (default 3000)
+- `--except <pid,...>`: exclude these PIDs when using `--all`
+
+### `app relaunch`
+
+```powershell
+peeku app relaunch --pid 12345
+peeku app relaunch --processName mspaint
+peeku app relaunch --processName mspaint --waitUntilReady --waitMs 8000
+peeku app relaunch --processName mspaint --noFocus
+```
+
+Captures the running process's executable path, quits it gracefully, then re-launches the same exe.
+Exactly one of `--pid` or `--processName` is required; if neither is provided the call returns
+`ok=false` with `error.code=InvalidArgument`.
+
+- `--pid <int>`: select target by process ID
+- `--processName <name>`: select target by process name (first match)
+- `--waitUntilReady`: wait for the relaunched window to appear (default false)
+- `--waitMs <ms>`: timeout reused for BOTH the graceful-quit grace period AND launch readiness (default 5000)
+- `--noFocus`: do not bring the relaunched window to the foreground (default false)
+
+**Reliability note:** relaunch is reliable for classic Win32 executables (e.g. `mspaint.exe`,
+`notepad.exe`). For packaged/UWP apps (e.g. Calculator), `MainModule.FileName` returns the on-disk
+exe, which may not honour the package identity — re-launch via AUMID is more reliable for those.
+Use `app launch <aumid>` after `app quit` for packaged apps.
+
+Example output:
+
+```json
+{
+  "ok": true,
+  "traceId": "abc123",
+  "timestamp": "2026-06-16T10:00:00Z",
+  "durationMs": 1823,
+  "processId": 9876,
+  "executablePath": "C:\\Windows\\system32\\mspaint.exe",
+  "window": { "hwnd": "0x00010ABC", "processId": 9876, "title": "Untitled - Paint", "processName": "mspaint" }
+}
+```
+
+### `app list`
+
+```powershell
+peeku app list
+peeku app list --limit 20
+```
+
+Returns one entry per distinct process that owns at least one visible top-level window.
+Each entry carries a single representative window title (prefers the first window with a non-empty
+title). The entry with `active: true` is the process that owns the current foreground window; at
+most one entry is active.
+
+- `--limit <n>`: max distinct apps returned (default 100); applied after grouping by process
+
+Example output:
+
+```json
+{
+  "ok": true,
+  "traceId": "def456",
+  "timestamp": "2026-06-16T10:00:01Z",
+  "durationMs": 42,
+  "apps": [
+    { "processId": 1234, "processName": "msedge",   "title": "GitHub - Microsoft Edge", "active": true },
+    { "processId": 5678, "processName": "mspaint",  "title": "Untitled - Paint",        "active": false },
+    { "processId": 9012, "processName": "explorer", "title": "This PC",                 "active": false }
+  ]
+}
+```
+
 ## Exit codes
 
 | Code | Class | `error.code` values |

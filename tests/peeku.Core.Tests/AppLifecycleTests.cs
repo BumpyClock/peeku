@@ -178,4 +178,108 @@ public sealed class AppLifecycleTests
     Assert.Equal(0, result.Closed);
     Assert.Equal(0, result.Killed);
   }
+
+  // ── AppRelaunchRequest record ─────────────────────────────────────────────
+
+  [Fact]
+  public void AppRelaunchRequest_Defaults_AreCorrect()
+  {
+    var req = new AppRelaunchRequest();
+    Assert.Null(req.ProcessId);
+    Assert.Null(req.ProcessName);
+    Assert.False(req.WaitUntilReady);
+    Assert.Equal(5000, req.WaitMs);
+    Assert.False(req.NoFocus);
+  }
+
+  [Fact]
+  public void AppRelaunchRequest_AllFields_RoundTrip()
+  {
+    var req = new AppRelaunchRequest(
+      ProcessId: 42,
+      ProcessName: "mspaint",
+      WaitUntilReady: true,
+      WaitMs: 8000,
+      NoFocus: true);
+
+    Assert.Equal(42, req.ProcessId);
+    Assert.Equal("mspaint", req.ProcessName);
+    Assert.True(req.WaitUntilReady);
+    Assert.Equal(8000, req.WaitMs);
+    Assert.True(req.NoFocus);
+  }
+
+  // ── AppListRequest record ─────────────────────────────────────────────────
+
+  [Fact]
+  public void AppListRequest_Defaults_AreCorrect()
+  {
+    var req = new AppListRequest();
+    Assert.Equal(100, req.Limit);
+  }
+
+  [Fact]
+  public void AppListRequest_AllFields_RoundTrip()
+  {
+    var req = new AppListRequest(Limit: 25);
+    Assert.Equal(25, req.Limit);
+  }
+
+  // ── AppRelaunchResult / AppListResult / AppInfo records ───────────────────
+
+  [Fact]
+  public void AppListResult_Ok_CanBeConstructed()
+  {
+    var meta = Results.Start().Meta();
+    var apps = new[] { new AppInfo(ProcessId: 100, ProcessName: "notepad", Title: "Untitled", Active: false) };
+    var result = new AppListResult(Ok: true, Meta: meta, Apps: apps);
+
+    Assert.True(result.Ok);
+    Assert.Single(result.Apps);
+    Assert.Null(result.Error);
+  }
+
+  [Fact]
+  public void AppInfo_AllFields_RoundTrip()
+  {
+    var info = new AppInfo(ProcessId: 42, ProcessName: "mspaint", Title: "Untitled - Paint", Active: true);
+
+    Assert.Equal(42, info.ProcessId);
+    Assert.Equal("mspaint", info.ProcessName);
+    Assert.Equal("Untitled - Paint", info.Title);
+    Assert.True(info.Active);
+  }
+
+  [Fact]
+  public void AppInfo_Defaults_AreCorrect()
+  {
+    var info = new AppInfo(ProcessId: 1, ProcessName: "explorer");
+    Assert.Null(info.Title);
+    Assert.False(info.Active);
+  }
+
+  // ── Relaunch: no pid and no name → InvalidArgument ───────────────────────
+
+  [Fact]
+  public async Task RelaunchAsync_NoPidNoName_ReturnsInvalidArgument()
+  {
+    var req = new AppRelaunchRequest();
+    var result = await AppLifecycle.RelaunchAsync(req, CancellationToken.None);
+
+    Assert.False(result.Ok);
+    Assert.Equal(PeekuErrors.Code(PeekuErrorCode.InvalidArgument), result.Error!.Code);
+  }
+
+  // ── Relaunch: unknown pid → NotFound ─────────────────────────────────────
+
+  [Fact]
+  public async Task RelaunchAsync_UnknownPid_ReturnsNotFound()
+  {
+    // PID int.MaxValue is extremely unlikely to exist.
+    var req = new AppRelaunchRequest(ProcessId: int.MaxValue);
+    var result = await AppLifecycle.RelaunchAsync(req, CancellationToken.None);
+
+    Assert.False(result.Ok);
+    Assert.Equal(PeekuErrors.Code(PeekuErrorCode.NotFound), result.Error!.Code);
+  }
 }

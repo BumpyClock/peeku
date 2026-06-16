@@ -113,6 +113,8 @@ public sealed class PeekuMcpToolDispatcherTests
     public Task<WindowActionResult> WindowCloseAsync(WindowCloseRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<AppLaunchResult> AppLaunchAsync(AppLaunchRequest req, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<AppRelaunchResult> AppRelaunchAsync(AppRelaunchRequest req, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<AppListResult> AppListAsync(AppListRequest req, CancellationToken ct = default) => throw new NotImplementedException();
   }
 }
 

@@ -212,6 +212,8 @@ public sealed class ToolParityTests
     // App lifecycle (S4).
     "peeku_app_launch"        => """{"target":"notepad.exe"}""",
     "peeku_app_quit"          => """{"processId":1}""",
+    "peeku_app_relaunch"      => """{"processId":1}""",
+    "peeku_app_list"          => "{}",
 
     _ => "{}",
   };
@@ -325,6 +327,10 @@ file sealed class ThrowingFakeClient : IPeekuClient
     => Task.FromException<AppLaunchResult>(new NotImplementedException(nameof(AppLaunchAsync)));
   public Task<AppQuitResult> AppQuitAsync(AppQuitRequest req, CancellationToken ct = default)
     => Task.FromException<AppQuitResult>(new NotImplementedException(nameof(AppQuitAsync)));
+  public Task<AppRelaunchResult> AppRelaunchAsync(AppRelaunchRequest req, CancellationToken ct = default)
+    => Task.FromException<AppRelaunchResult>(new NotImplementedException(nameof(AppRelaunchAsync)));
+  public Task<AppListResult> AppListAsync(AppListRequest req, CancellationToken ct = default)
+    => Task.FromException<AppListResult>(new NotImplementedException(nameof(AppListAsync)));
 
 #pragma warning disable CS1998 // async method lacks await — intentional (throws before any yield)
   private static async IAsyncEnumerable<ObservationEvent> ThrowAsyncEnumerable(
