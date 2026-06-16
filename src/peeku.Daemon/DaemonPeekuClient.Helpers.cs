@@ -406,10 +406,19 @@ public sealed partial class DaemonPeekuClient
   {
     warning = null;
     var roots = ResolveRootsForPid(pid, ct);
+
+    // UWP fallback: a packaged app's elements report the APP's pid, but its top-level window is owned
+    // by ApplicationFrameHost (a different pid), so the pid-scoped enumeration is EMPTY and the re-walk
+    // would falsely report WindowNotFound. Re-walk every top-level window to find the matching durable
+    // refId. Fallback-only — classic apps (window pid == element pid) resolve via the pid scope above.
     if (roots.Count == 0)
     {
-      warning = "Target window not found.";
-      return null;
+      roots = ResolveAllTopLevelRoots(ct);
+      if (roots.Count == 0)
+      {
+        warning = "Target window not found.";
+        return null;
+      }
     }
 
     foreach (var root in roots)
@@ -423,6 +432,38 @@ public sealed partial class DaemonPeekuClient
     }
 
     return null;
+  }
+
+  /// <summary>
+  /// Resolves live UIA roots for ALL top-level windows (no pid filter). Fallback for when a
+  /// pid-scoped resolve is empty — notably UWP/packaged apps, whose window is owned by
+  /// ApplicationFrameHost, not the element's pid. More expensive (re-walks each window's subtree),
+  /// so only used when the pid scope yields nothing.
+  /// </summary>
+  private IReadOnlyList<AutomationElement> ResolveAllTopLevelRoots(CancellationToken ct)
+  {
+    var windows = Win32Windows.ListWindows(
+      new WindowsListRequest(TitleContains: null, ProcessName: null, Limit: 256),
+      ct);
+
+    var roots = new List<AutomationElement>(capacity: 16);
+    foreach (var w in windows)
+    {
+      if (!TryParseHwndHex(w.HwndHex, out var hwnd))
+      {
+        continue;
+      }
+
+      try
+      {
+        roots.Add(_automation.FromHandle(hwnd));
+      }
+      catch
+      {
+      }
+    }
+
+    return roots;
   }
 
   private readonly record struct ActionResolution(
