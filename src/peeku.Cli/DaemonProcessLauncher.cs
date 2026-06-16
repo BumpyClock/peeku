@@ -34,6 +34,14 @@ internal sealed class DaemonProcessLauncher
     }
 
     var (fileName, args) = ResolveCommand(pipeName.Trim());
+
+    if (background)
+    {
+      var idleMinutes = ResolveIdleMinutes();
+      var markerPath = DaemonMarker.DefaultPath;
+      args = $"{args} --idle-timeout {idleMinutes} --marker-path \"{markerPath}\"";
+    }
+
     var info = new ProcessStartInfo
     {
       FileName = fileName,
@@ -67,6 +75,17 @@ internal sealed class DaemonProcessLauncher
     }
 
     return process;
+  }
+
+  private static int ResolveIdleMinutes()
+  {
+    var raw = Environment.GetEnvironmentVariable("PEEKU_DAEMON_IDLE_MINUTES");
+    if (int.TryParse(raw, out var parsed) && parsed > 0)
+    {
+      return parsed;
+    }
+
+    return 5;
   }
 
   private static (string FileName, string Arguments) ResolveCommand(string pipeName)

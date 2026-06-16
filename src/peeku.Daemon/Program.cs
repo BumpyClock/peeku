@@ -21,6 +21,8 @@ public sealed class Program
     Win32Screen.EnsureProcessDpiAware();
 
     var pipeName = ResolvePipeName(args);
+    var idleTimeout = ResolveIdleTimeout(args);
+    var markerPath = ResolveMarkerPath(args);
     var shutdown = new DaemonShutdown();
     using var cts = new CancellationTokenSource();
 
@@ -59,7 +61,7 @@ public sealed class Program
     using var session = new DaemonSession();
 
     var connection = new JsonRpcConnection(codec, dispatcher, session, shutdown);
-    var server = new DaemonServer(pipeName, connection, shutdown);
+    var server = new DaemonServer(pipeName, connection, shutdown, idleTimeout, markerPath);
 
     try
     {
@@ -117,5 +119,61 @@ public sealed class Program
     var user = Environment.UserName ?? "";
     var normalized = string.IsNullOrWhiteSpace(user) ? "user" : user.Trim();
     return $"peeku.{normalized}.v1";
+  }
+
+  /// <summary>
+  /// Parses --idle-timeout &lt;minutes&gt;. Absent, non-numeric, or &lt;= 0 returns TimeSpan.Zero
+  /// (persistent — no reap).
+  /// </summary>
+  private static TimeSpan ResolveIdleTimeout(string[] args)
+  {
+    for (var i = 0; i < args.Length; i++)
+    {
+      var arg = args[i] ?? "";
+      if (!string.Equals(arg, "--idle-timeout", StringComparison.OrdinalIgnoreCase))
+      {
+        continue;
+      }
+
+      if (i + 1 >= args.Length)
+      {
+        return TimeSpan.Zero;
+      }
+
+      var value = args[i + 1] ?? "";
+      if (int.TryParse(value, out var minutes) && minutes > 0)
+      {
+        return TimeSpan.FromMinutes(minutes);
+      }
+
+      return TimeSpan.Zero;
+    }
+
+    return TimeSpan.Zero;
+  }
+
+  /// <summary>
+  /// Parses --marker-path "&lt;absolute path&gt;". Returns null if absent or empty.
+  /// </summary>
+  private static string? ResolveMarkerPath(string[] args)
+  {
+    for (var i = 0; i < args.Length; i++)
+    {
+      var arg = args[i] ?? "";
+      if (!string.Equals(arg, "--marker-path", StringComparison.OrdinalIgnoreCase))
+      {
+        continue;
+      }
+
+      if (i + 1 >= args.Length)
+      {
+        return null;
+      }
+
+      var value = (args[i + 1] ?? "").Trim();
+      return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    return null;
   }
 }
