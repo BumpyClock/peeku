@@ -17,20 +17,27 @@ internal static class CliFlowCommands
 
   private static Command CreateObserveCommand()
   {
-    var cmd = new Command("observe", "Observe UIA events (focus supported)");
+    var cmd = new Command("observe", "Observe UIA events (focus, structure, property)");
     var targetOpts = CliTargets.AddTo(cmd, allowQuery: true);
 
-    var eventsOpt = new Option<string>("--events") { Description = "structure|property|focus|all" };
-    eventsOpt.DefaultValueFactory = _ => "all";
+    var eventsOpt = new Option<string[]>("--events")
+    {
+      Description = "Channels to observe: structure|property|focus|all (repeatable; focus carries a WinEvent foreground backstop)",
+      AllowMultipleArgumentsPerToken = true,
+    };
+    eventsOpt.DefaultValueFactory = _ => new[] { "all" };
     eventsOpt.Validators.Add(r =>
     {
-      var v = (r.GetValueOrDefault<string>() ?? "all").Trim();
-      if (!string.Equals(v, "structure", StringComparison.OrdinalIgnoreCase) &&
-          !string.Equals(v, "property", StringComparison.OrdinalIgnoreCase) &&
-          !string.Equals(v, "focus", StringComparison.OrdinalIgnoreCase) &&
-          !string.Equals(v, "all", StringComparison.OrdinalIgnoreCase))
+      foreach (var raw in r.GetValueOrDefault<string[]>() ?? Array.Empty<string>())
       {
-        r.AddError("Invalid --events. Allowed: structure|property|focus|all");
+        var v = (raw ?? "").Trim();
+        if (!string.Equals(v, "structure", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(v, "property", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(v, "focus", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(v, "all", StringComparison.OrdinalIgnoreCase))
+        {
+          r.AddError($"Invalid --events value '{raw}'. Allowed: structure|property|focus|all");
+        }
       }
     });
 
@@ -47,7 +54,6 @@ internal static class CliFlowCommands
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
       var ctx = CliContextAccessor.Current;
-      using var scope = TimeoutScope.Create(ctx.Timeout, ct);
 
       if (!CliTargets.TryParseOrDefaultFocused(parse, targetOpts, out var target, out var targetError))
       {
@@ -62,17 +68,28 @@ internal static class CliFlowCommands
 
       var events = new List<ObservationEvent>(capacity: Math.Clamp(req.MaxEvents, 0, 512));
 
+      // observe's stream lifetime is owned by --duration, NOT the global --timeout (which
+      // defaults to 10s and would otherwise silently truncate a longer --duration). Pass the
+      // raw invocation token so Ctrl-C still stops it; --duration governs normal completion.
       try
       {
         var client = CliPeekuClient.CreateDefault();
-        await foreach (var ev in client.ObserveAsync(req, scope.Token).ConfigureAwait(false))
+        await foreach (var ev in client.ObserveAsync(req, ct).ConfigureAwait(false))
         {
           events.Add(ev);
         }
       }
       catch (OperationCanceledException)
       {
-        // normal: duration/timeout
+        // Ctrl-C on the daemon path surfaces here; in-proc cancellation ends via yield break.
+      }
+
+      // The in-proc engine swallows its own cancellation, so detect truncation from the token
+      // rather than an exception: a Ctrl-C before --duration is the only way ct is cancelled here.
+      if (ct.IsCancellationRequested)
+      {
+        Console.Error.WriteLine(
+          $"[peeku] observe cancelled before --duration ({req.Duration:c}); returning {events.Count} event(s) collected so far.");
       }
 
       CliOutput.Write(events, ctx.Format);
@@ -406,12 +423,25 @@ internal static class CliFlowCommands
     return cmd;
   }
 
-  private static ObserveEventSet ParseEvents(string? raw)
+  private static ObserveEventSet ParseEvents(string[]? raw)
   {
-    if (string.Equals(raw, "structure", StringComparison.OrdinalIgnoreCase)) return ObserveEventSet.Structure;
-    if (string.Equals(raw, "property", StringComparison.OrdinalIgnoreCase)) return ObserveEventSet.Property;
-    if (string.Equals(raw, "focus", StringComparison.OrdinalIgnoreCase)) return ObserveEventSet.Focus;
-    return ObserveEventSet.All;
+    if (raw is null || raw.Length == 0)
+    {
+      return ObserveEventSet.All;
+    }
+
+    // "all" is an alias for the full set; otherwise OR the individual channel tokens through the
+    // shared SSOT decoder so subsets like `--events focus --events structure` compose correctly.
+    foreach (var t in raw)
+    {
+      if (string.Equals(t?.Trim(), "all", StringComparison.OrdinalIgnoreCase))
+      {
+        return ObserveEventSet.All;
+      }
+    }
+
+    var set = ObserveEventTokens.Decode(raw);
+    return set == ObserveEventSet.None ? ObserveEventSet.All : set;
   }
 
   // Short connect/ping budget for the watch daemon probe so a stale marker no longer costs a

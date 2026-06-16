@@ -478,24 +478,18 @@ internal static class BatchArgs
       return null;
     }
 
-    var hasFocus = false;
-    var hasOther = false;
+    var tokens = new List<string>();
     foreach (var item in e.EnumerateArray())
     {
-      if (item.ValueKind != JsonValueKind.String)
+      if (item.ValueKind == JsonValueKind.String)
       {
-        continue;
+        tokens.Add(item.GetString() ?? "");
       }
-
-      var s = (item.GetString() ?? "").Trim().ToLowerInvariant();
-      if (s == "focus") hasFocus = true;
-      else if (s is "structure" or "property") hasOther = true;
     }
 
-    if (hasOther && hasFocus) return ObserveEventSet.All;
-    if (hasOther) return ObserveEventSet.Structure;
-    if (hasFocus) return ObserveEventSet.Focus;
-    return null;
+    // Single source of truth — exact inverse of DaemonPeekuClient's encode. No collapse.
+    var set = ObserveEventTokens.Decode(tokens);
+    return set == ObserveEventSet.None ? null : set;
   }
 
   internal static bool TryReadNamedTarget(JsonElement args, string propName, out Target target, out string? error)

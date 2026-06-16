@@ -651,7 +651,7 @@ internal sealed class DaemonPeekuClient : IPeekuClient
     var args = new Dictionary<string, object?>
     {
       ["target"] = BuildTarget(req.Target),
-      ["events"] = ObserveEvents(req.Events),
+      ["events"] = ObserveEventTokens.Encode(req.Events),
       ["maxEvents"] = req.MaxEvents,
     };
 
@@ -774,16 +774,6 @@ internal sealed class DaemonPeekuClient : IPeekuClient
 
   private static string ScrollDirectionString(ScrollDirection direction)
     => direction == ScrollDirection.Horizontal ? "horizontal" : "vertical";
-
-  private static string[] ObserveEvents(ObserveEventSet eventsSet)
-    => eventsSet switch
-    {
-      ObserveEventSet.Focus => new[] { "focus" },
-      ObserveEventSet.Structure => new[] { "structure", "property" },
-      ObserveEventSet.Property => new[] { "property" },
-      ObserveEventSet.All => new[] { "structure", "property", "focus" },
-      _ => new[] { "structure", "property", "focus" },
-    };
 
   private static ResultMeta CreateFailureMeta()
   {

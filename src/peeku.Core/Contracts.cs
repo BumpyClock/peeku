@@ -298,12 +298,14 @@ public record ActionResult(
   PeekuError? Error = null,
   JsonElement? Evidence = null) : ResultBase(Ok, Meta, Error);
 
+[Flags]
 public enum ObserveEventSet
 {
-  Structure = 0,
-  Property = 1,
-  Focus = 2,
-  All = 3,
+  None = 0,
+  Structure = 1,
+  Property = 2,
+  Focus = 4,
+  All = Structure | Property | Focus,
 }
 
 public record ObserveRequest(
