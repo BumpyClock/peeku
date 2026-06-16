@@ -35,9 +35,25 @@ internal static class Program
       }
     });
 
-    var timeoutOpt = new Option<TimeSpan>("--timeout") { Description = "Default timeout (e.g. 00:00:10)" };
+    var timeoutOpt = new Option<TimeSpan>("--timeout")
+    {
+      Description = "Default timeout: bare integer = milliseconds (e.g. 5000), or 500ms|5s|2m|hh:mm:ss",
+    };
     timeoutOpt.Recursive = true;
     timeoutOpt.DefaultValueFactory = _ => TimeSpan.FromSeconds(10);
+    // Bare integer => milliseconds (agents-first). The default TimeSpan parser reads a bare integer
+    // as DAYS, so `--timeout 5000` silently meant 5000 days (effectively no timeout).
+    timeoutOpt.CustomParser = result =>
+    {
+      var raw = result.Tokens.Count > 0 ? result.Tokens[0].Value : null;
+      if (CliTimeout.TryParse(raw, out var ts, out var error))
+      {
+        return ts;
+      }
+
+      result.AddError(error ?? "Invalid --timeout.");
+      return TimeSpan.FromSeconds(10);
+    };
 
     var logLevelOpt = new Option<string>("--log-level") { Description = "Log level: trace|debug|info|warn|error" };
     logLevelOpt.Recursive = true;
