@@ -430,6 +430,37 @@ internal static class BatchArgs
     };
   }
 
+  internal static WaitCondition? ReadWaitCondition(JsonElement obj, string name)
+  {
+    var s = ReadString(obj, name);
+    if (string.IsNullOrWhiteSpace(s))
+    {
+      return null;
+    }
+
+    return s.Trim().ToLowerInvariant() switch
+    {
+      "exists"        => WaitCondition.Exists,
+      "notexists"     => WaitCondition.NotExists,
+      "enabled"       => WaitCondition.Enabled,
+      "disabled"      => WaitCondition.Disabled,
+      "visible"       => WaitCondition.Visible,
+      "hidden"        => WaitCondition.Hidden,
+      "focused"       => WaitCondition.Focused,
+      "toggleon"      => WaitCondition.ToggleOn,
+      "toggleoff"     => WaitCondition.ToggleOff,
+      "expanded"      => WaitCondition.Expanded,
+      "collapsed"     => WaitCondition.Collapsed,
+      "selected"      => WaitCondition.Selected,
+      "notselected"   => WaitCondition.NotSelected,
+      "valueequals"   => WaitCondition.ValueEquals,
+      "valuecontains" => WaitCondition.ValueContains,
+      "nameequals"    => WaitCondition.NameEquals,
+      "namecontains"  => WaitCondition.NameContains,
+      _ => null,
+    };
+  }
+
   internal static ObserveEventSet? ReadObserveEventSet(JsonElement obj, string name)
   {
     if (obj.ValueKind != JsonValueKind.Object)

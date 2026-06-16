@@ -99,9 +99,24 @@ internal static class CliFlowCommands
     var liveOpt = new Option<bool>("--live") { Description = "Use live UIA evaluation (event-driven) for selector" };
     liveOpt.DefaultValueFactory = _ => false;
 
+    var conditionOpt = new Option<string?>("--condition") { Description = "exists|notExists|enabled|disabled|visible|hidden|focused|toggleOn|toggleOff|expanded|collapsed|selected|notSelected|valueEquals|valueContains|nameEquals|nameContains (default: exists)" };
+    conditionOpt.DefaultValueFactory = _ => "exists";
+    conditionOpt.Validators.Add(r =>
+    {
+      var v = (r.GetValueOrDefault<string>() ?? "exists").Trim();
+      if (!TryParseCondition(v, out _))
+      {
+        r.AddError($"Invalid --condition '{v}'. See --help for valid values.");
+      }
+    });
+
+    var valueOpt = new Option<string?>("--value") { Description = "Expected value for valueEquals/valueContains/nameEquals/nameContains conditions" };
+
     cmd.Add(selectorOpt);
     cmd.Add(queryArg);
     cmd.Add(liveOpt);
+    cmd.Add(conditionOpt);
+    cmd.Add(valueOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
@@ -117,11 +132,21 @@ internal static class CliFlowCommands
         return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, targetError ?? "Invalid target."));
       }
 
+      var conditionRaw = (parse.GetValue(conditionOpt) ?? "exists").Trim();
+      if (!TryParseCondition(conditionRaw, out var condition))
+      {
+        return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument, $"Invalid --condition '{conditionRaw}'."));
+      }
+
+      var expectedValue = parse.GetValue(valueOpt);
+
       var client = CliPeekuClient.CreateDefault();
       var res = await client.WaitAsync(new WaitRequest(
         Selector: selector!,
         Target: target,
-        Timeout: ctx.Timeout), ct).ConfigureAwait(false);
+        Timeout: ctx.Timeout,
+        Condition: condition,
+        ExpectedValue: expectedValue), ct).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
       return res.Ok ? 0 : ExitCodes.For(res.Error);
@@ -431,6 +456,34 @@ internal static class CliFlowCommands
       error = "Daemon unreachable. Restart with `peeku --daemon`.";
       return false;
     }
+  }
+
+  private static bool TryParseCondition(string raw, out WaitCondition condition)
+  {
+    condition = WaitCondition.Exists;
+    return (raw ?? "").Trim().ToLowerInvariant() switch
+    {
+      "exists"        => Set(out condition, WaitCondition.Exists),
+      "notexists"     => Set(out condition, WaitCondition.NotExists),
+      "enabled"       => Set(out condition, WaitCondition.Enabled),
+      "disabled"      => Set(out condition, WaitCondition.Disabled),
+      "visible"       => Set(out condition, WaitCondition.Visible),
+      "hidden"        => Set(out condition, WaitCondition.Hidden),
+      "focused"       => Set(out condition, WaitCondition.Focused),
+      "toggleon"      => Set(out condition, WaitCondition.ToggleOn),
+      "toggleoff"     => Set(out condition, WaitCondition.ToggleOff),
+      "expanded"      => Set(out condition, WaitCondition.Expanded),
+      "collapsed"     => Set(out condition, WaitCondition.Collapsed),
+      "selected"      => Set(out condition, WaitCondition.Selected),
+      "notselected"   => Set(out condition, WaitCondition.NotSelected),
+      "valueequals"   => Set(out condition, WaitCondition.ValueEquals),
+      "valuecontains" => Set(out condition, WaitCondition.ValueContains),
+      "nameequals"    => Set(out condition, WaitCondition.NameEquals),
+      "namecontains"  => Set(out condition, WaitCondition.NameContains),
+      _ => false,
+    };
+
+    static bool Set(out WaitCondition c, WaitCondition v) { c = v; return true; }
   }
 
   private static string BuildMatchSignature(IReadOnlyList<FindMatch> matches)

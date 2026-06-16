@@ -371,7 +371,9 @@ internal static class BatchRunner
           }
 
           var timeoutMs = BatchArgs.ReadInt(args, "timeoutMs") ?? 10_000;
-          var req = new WaitRequest(selector, target, TimeSpan.FromMilliseconds(Math.Max(0, timeoutMs)));
+          var condition = BatchArgs.ReadWaitCondition(args, "condition") ?? WaitCondition.Exists;
+          var expectedValue = BatchArgs.ReadString(args, "value");
+          var req = new WaitRequest(selector, target, TimeSpan.FromMilliseconds(Math.Max(0, timeoutMs)), condition, expectedValue);
           var res = await client.WaitAsync(req, ct).ConfigureAwait(false);
           return (res.Ok, res, res.Error);
         }

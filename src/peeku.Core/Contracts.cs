@@ -317,10 +317,38 @@ public record ObservationEvent(
   string EventType,
   IReadOnlyDictionary<string, object?>? Data = null);
 
+/// <summary>
+/// Condition to evaluate on each poll during a wait.
+/// Exists/NotExists use the snapshot path; all others use the live path.
+/// Ref: UI Automation Pattern Identifiers (MSDN), FlaUI 5.0 pattern API.
+/// </summary>
+public enum WaitCondition
+{
+  Exists,
+  NotExists,
+  Enabled,
+  Disabled,
+  Visible,
+  Hidden,
+  Focused,
+  ToggleOn,
+  ToggleOff,
+  Expanded,
+  Collapsed,
+  Selected,
+  NotSelected,
+  ValueEquals,
+  ValueContains,
+  NameEquals,
+  NameContains,
+}
+
 public record WaitRequest(
   Selector Selector,
   Target Target,
-  TimeSpan Timeout);
+  TimeSpan Timeout,
+  WaitCondition Condition = WaitCondition.Exists,
+  string? ExpectedValue = null);
 
 public record WaitResult(
   bool Ok,

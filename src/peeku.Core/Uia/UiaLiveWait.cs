@@ -14,11 +14,26 @@ internal static class UiaLiveWait
   private static readonly TimeSpan DefaultPollFallback = TimeSpan.FromSeconds(1);
   private static readonly TimeSpan DefaultDebounce = TimeSpan.FromMilliseconds(50);
 
+  // CancellationTokenSource.CancelAfter rejects a delay whose total ms exceeds int.MaxValue
+  // (~24.8 days). A bare --timeout like "2000" is parsed by TimeSpan as 2000 *days*, which
+  // overflows that limit. Cap at int.MaxValue ms so any well-meaning large timeout is honored
+  // as "effectively unbounded" instead of throwing ArgumentOutOfRangeException.
+  private static readonly TimeSpan MaxTimeout = TimeSpan.FromMilliseconds(int.MaxValue);
+
   internal static Task<WaitResult> WaitAsync(
     WaitRequest req,
     Func<Target, UIA3Automation, CancellationToken, RootResolution> resolveRoot,
     CancellationToken ct)
     => WaitAsync(req, resolveRoot, DefaultPollFallback, DefaultDebounce, ct);
+
+  /// <summary>
+  /// Returns true when the condition requires the live UIA path.
+  /// NotExists needs live because the snapshot path has no inversion;
+  /// all state conditions (Enabled, ToggleOn, etc.) need pattern reads unavailable on snapshots.
+  /// Only Exists uses the cheaper snapshot-poll path.
+  /// </summary>
+  internal static bool RequiresLivePath(WaitCondition condition)
+    => condition != WaitCondition.Exists;
 
   internal static async Task<WaitResult> WaitAsync(
     WaitRequest req,
@@ -64,6 +79,11 @@ internal static class UiaLiveWait
       if (timeout < TimeSpan.Zero)
       {
         timeout = TimeSpan.Zero;
+      }
+      else if (timeout > MaxTimeout)
+      {
+        // Clamp so CancelAfter below never sees an out-of-range delay.
+        timeout = MaxTimeout;
       }
 
       var poll = pollFallback <= TimeSpan.Zero ? DefaultPollFallback : pollFallback;
@@ -130,7 +150,18 @@ internal static class UiaLiveWait
               Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Invalid selector.", new { selector = req.Selector.Expr, error = ex.Message }));
           }
 
-          if (match is not null)
+          // NotExists: success when element is absent.
+          if (req.Condition == WaitCondition.NotExists)
+          {
+            if (match is null)
+            {
+              return new WaitResult(
+                Ok: true,
+                Meta: scope.Meta(warning: warning),
+                Found: true);
+            }
+          }
+          else if (match is not null && WaitPredicates.Evaluate(match, req.Condition, req.ExpectedValue))
           {
             string refId;
             try

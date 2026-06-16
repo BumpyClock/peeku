@@ -12,7 +12,9 @@ public sealed partial class DaemonPeekuClient
       return WaitSnapshotAsync(req!, ct);
     }
 
-    if (req.Selector is not null && !req.Selector.PreferCachedSnapshot)
+    // Condition-bearing waits need live pattern state; NotExists also uses live path.
+    if (UiaLiveWait.RequiresLivePath(req.Condition) ||
+        (req.Selector is not null && !req.Selector.PreferCachedSnapshot))
     {
       return WaitLiveAsync(req, ct);
     }
@@ -89,7 +91,18 @@ public sealed partial class DaemonPeekuClient
             Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Invalid selector.", new { selector = req.Selector.Expr, error = ex.Message })));
         }
 
-        if (matches.Count > 0)
+        // NotExists: success when element is absent.
+        if (req.Condition == WaitCondition.NotExists)
+        {
+          if (matches.Count == 0)
+          {
+            return Task.FromResult(new WaitResult(
+              Ok: true,
+              Meta: scope.Meta(warning: warning),
+              Found: true));
+          }
+        }
+        else if (matches.Count > 0 && WaitPredicates.Evaluate(matches[0], req.Condition, req.ExpectedValue))
         {
           var refId = StoreHandle(matches[0]);
           return Task.FromResult(new WaitResult(

@@ -437,7 +437,9 @@ public sealed partial class UiaClient : IPeekuClient
       return UiaWait.WaitAsync(req!, UiaSnapshotAsync, ct);
     }
 
-    if (req.Selector is not null && !req.Selector.PreferCachedSnapshot)
+    // Condition-bearing waits need live pattern state; NotExists also uses live path.
+    if (UiaLiveWait.RequiresLivePath(req.Condition) ||
+        (req.Selector is not null && !req.Selector.PreferCachedSnapshot))
     {
       static UiaLiveWait.RootResolution Resolve(Target target, UIA3Automation automation, CancellationToken token)
       {

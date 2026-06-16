@@ -352,12 +352,44 @@ internal sealed class DaemonPeekuClient : IPeekuClient
       ["timeoutMs"] = (int)Math.Max(0, Math.Min(int.MaxValue, req.Timeout.TotalMilliseconds)),
     };
 
+    if (req.Condition != WaitCondition.Exists)
+    {
+      args["condition"] = WaitConditionToString(req.Condition);
+    }
+
+    if (req.ExpectedValue is not null)
+    {
+      args["value"] = req.ExpectedValue;
+    }
+
     return CallResultAsync(
       "peeku_wait",
       args,
       (meta, error) => new WaitResult(false, meta, false, null, error),
       ct);
   }
+
+  private static string WaitConditionToString(WaitCondition condition) => condition switch
+  {
+    WaitCondition.Exists        => "exists",
+    WaitCondition.NotExists     => "notExists",
+    WaitCondition.Enabled       => "enabled",
+    WaitCondition.Disabled      => "disabled",
+    WaitCondition.Visible       => "visible",
+    WaitCondition.Hidden        => "hidden",
+    WaitCondition.Focused       => "focused",
+    WaitCondition.ToggleOn      => "toggleOn",
+    WaitCondition.ToggleOff     => "toggleOff",
+    WaitCondition.Expanded      => "expanded",
+    WaitCondition.Collapsed     => "collapsed",
+    WaitCondition.Selected      => "selected",
+    WaitCondition.NotSelected   => "notSelected",
+    WaitCondition.ValueEquals   => "valueEquals",
+    WaitCondition.ValueContains => "valueContains",
+    WaitCondition.NameEquals    => "nameEquals",
+    WaitCondition.NameContains  => "nameContains",
+    _ => "exists",
+  };
 
   public Task<BatchResult> BatchAsync(BatchRequest req, CancellationToken ct = default)
     => _rpc.CallAsync<BatchResult>("peeku.batch", req, ct);
