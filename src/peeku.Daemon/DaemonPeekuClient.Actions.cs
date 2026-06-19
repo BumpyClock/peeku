@@ -419,7 +419,7 @@ public sealed partial class DaemonPeekuClient
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request is required."));
       }
 
-      methodUsed = ActionMethodRouter.Route(ActionMethod.Auto, uiaSupported: true, inputSupported: false, out var routeError);
+      methodUsed = ActionMethodRouter.Route(req.Method, uiaSupported: true, inputSupported: true, out var routeError);
       if (routeError is not null)
       {
         return new ActionResult(
@@ -455,6 +455,51 @@ public sealed partial class DaemonPeekuClient
           Meta: scope.Meta(warning: resolved.Warning),
           MethodUsed: methodUsed,
           Error: resolved.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "Selection resolution failed."));
+      }
+
+      if (methodUsed == ActionMethod.Input || req.Foreground)
+      {
+        // Resolve hwnd + element rect before any await (threading fix: no COM after first await).
+        var inputTarget = req.Target;
+        var targetWindow = Win32Windows.ResolveTargetWindow(inputTarget ?? new Target.FocusedWindow(), ct);
+        var targetHwnd = targetWindow?.Hwnd ?? IntPtr.Zero;
+
+        Rect? rect = null;
+        if (resolved.Element is not null)
+        {
+          var uiaRect = resolved.Element.BoundingRectangle;
+          rect = new Rect(uiaRect.X, uiaRect.Y, uiaRect.Width, uiaRect.Height);
+        }
+
+        // Capture text before any await — resolved.Element is FlaUI COM, must not touch after.
+        var capturedText = req.Text;
+        var capturedDelayMs = req.DelayMs.GetValueOrDefault(0);
+
+        // Warn when Append=false — synthetic keystrokes insert at caret and cannot replace.
+        var typeWarning = !req.Append
+          ? "Input path inserts at the caret and does not honor Append=false (replace). Use the Uia path for replace semantics."
+          : null;
+
+        var (typeOk, typeError, typeEvidence) = await SyntheticText.TypeUnicodeAsync(
+          targetHwnd, rect, capturedText, capturedDelayMs, ct).ConfigureAwait(false);
+        if (!typeOk)
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, typeWarning)),
+            MethodUsed: methodUsed,
+            Error: typeError);
+        }
+
+        var evidenceJson = typeEvidence is not null
+          ? System.Text.Json.JsonSerializer.SerializeToElement(typeEvidence)
+          : (System.Text.Json.JsonElement?)null;
+
+        return new ActionResult(
+          Ok: true,
+          Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, typeWarning)),
+          MethodUsed: methodUsed,
+          Evidence: evidenceJson);
       }
 
       var delayMs = req.DelayMs.GetValueOrDefault(0);

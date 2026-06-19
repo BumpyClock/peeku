@@ -268,7 +268,9 @@ public record TypeRequest(
   Target? Target = null,
   string Text = "",
   bool Append = true,
-  int? DelayMs = null);
+  int? DelayMs = null,
+  ActionMethod Method = ActionMethod.Auto,
+  bool Foreground = false);
 
 public enum ScrollDirection
 {

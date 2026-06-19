@@ -306,7 +306,10 @@ internal static class BatchRunner
             return (false, null, error);
           }
 
-          var req = new TypeRequest(element, selector, target, text, append, delayMs);
+          var method = BatchArgs.ReadActionMethod(args, "method") ?? ActionMethod.Auto;
+          var foreground = BatchArgs.ReadBool(args, "foreground") ?? false;
+
+          var req = new TypeRequest(element, selector, target, text, append, delayMs, method, foreground);
           var res = await client.TypeAsync(req, ct).ConfigureAwait(false);
           return (res.Ok, res, res.Error);
         }

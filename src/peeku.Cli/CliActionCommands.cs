@@ -232,10 +232,28 @@ internal static class CliActionCommands
 
     var delayOpt = new Option<int?>("--delay-ms") { Description = "Optional inter-key delay (ms)" };
 
+    var methodOpt = new Option<string>("--method") { Description = "auto|uia|input" };
+    methodOpt.DefaultValueFactory = _ => "auto";
+    methodOpt.Validators.Add(r =>
+    {
+      var v = (r.GetValueOrDefault<string>() ?? "auto").Trim();
+      if (!string.Equals(v, "auto", StringComparison.OrdinalIgnoreCase) &&
+          !string.Equals(v, "uia", StringComparison.OrdinalIgnoreCase) &&
+          !string.Equals(v, "input", StringComparison.OrdinalIgnoreCase))
+      {
+        r.AddError("Invalid --method. Allowed: auto|uia|input");
+      }
+    });
+
+    var foregroundOpt = new Option<bool>("--foreground") { Description = "Use SendInput synthetic UNICODE keystrokes (steals + restores foreground). Works on password/UIA-blocked fields. Implied by --method input." };
+    foregroundOpt.DefaultValueFactory = _ => false;
+
     cmd.Add(textOpt);
     cmd.Add(textArg);
     cmd.Add(appendOpt);
     cmd.Add(delayOpt);
+    cmd.Add(methodOpt);
+    cmd.Add(foregroundOpt);
 
     cmd.SetAction(async (ParseResult parse, CancellationToken ct) =>
     {
@@ -270,6 +288,28 @@ internal static class CliActionCommands
 
       var append = parse.GetValue(appendOpt);
 
+      var method = ParseMethod(parse.GetValue(methodOpt));
+
+      // Precedence: --method input implies --foreground=true.
+      // Explicit --foreground=false + --method input is a contradiction → InvalidArgument.
+      bool foreground;
+      var foregroundResult = parse.GetResult(foregroundOpt);
+      var foregroundWasExplicit = foregroundResult is not null && !foregroundResult.Implicit;
+      if (method == ActionMethod.Input)
+      {
+        if (foregroundWasExplicit && !parse.GetValue(foregroundOpt))
+        {
+          return CliErrors.Write(ctx, PeekuErrors.Create(PeekuErrorCode.InvalidArgument,
+            "--method input implies --foreground; cannot combine with --foreground=false"));
+        }
+
+        foreground = true;
+      }
+      else
+      {
+        foreground = parse.GetValue(foregroundOpt);
+      }
+
       var client = CliPeekuClient.CreateDefault();
       var res = await client.TypeAsync(new TypeRequest(
         Element: elementRef,
@@ -277,7 +317,9 @@ internal static class CliActionCommands
         Target: target,
         Text: text,
         Append: append,
-        DelayMs: parse.GetValue(delayOpt)), scope.Token).ConfigureAwait(false);
+        DelayMs: parse.GetValue(delayOpt),
+        Method: method,
+        Foreground: foreground), scope.Token).ConfigureAwait(false);
 
       CliOutput.Write(res, ctx.Format);
       return res.Ok ? 0 : ExitCodes.For(res.Error, scope.DeadlineElapsed);

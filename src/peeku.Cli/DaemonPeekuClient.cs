@@ -255,6 +255,9 @@ internal sealed class DaemonPeekuClient : IPeekuClient
       args["delayMs"] = req.DelayMs.Value;
     }
 
+    args["method"] = ActionMethodString(req.Method);
+    args["foreground"] = req.Foreground;
+
     return CallResultAsync(
       "peeku_type",
       args,

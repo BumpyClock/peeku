@@ -205,10 +205,25 @@ peeku type --selector "window[name~=\"Notepad\"]/edit" --text "hello" --append f
 - `--live`: evaluate selector on live UIA tree (no snapshot)
 - target flags: `--focused`, `--desktop`, `--screenIndex`, `--hwnd`, or query (`--titleContains`/`--processName`/`--processId`) (default: focused)
 - `--append true|false` (default true)
+- `--method <auto|uia|input>` (default `auto`). `auto` uses UIA ValuePattern when available. `input` forces synthetic UNICODE keystrokes via `SendInput`.
+- `--foreground` (bool, default `false`). Bring the target window to the foreground and send synthetic keystrokes. Implied by `--method input`. Combining `--foreground false` with `--method input` is an error (`InvalidArgument`).
 - verification: if `ValuePattern` is supported, final value is auto-verified
   - mismatch => `ok=false`
   - unsupported => `ok=true` + warning
 - includes `evidence` payload in result (operation/status/expected/actual/verification flags)
+
+**Synthetic UNICODE input path** (`--method input`):
+
+```powershell
+peeku type "secret" --selector "#password" --method input
+peeku type "héllo" --selector "window[name~=\"Notepad\"]/edit" --method input
+```
+
+- Injects each UTF-16 code unit of the text via `KEYEVENTF_UNICODE`; astral characters (emoji, etc.) are sent as surrogate pairs — two code units each.
+- Works on password fields and other UIA-blocked controls where the default UIA `ValuePattern` path is unavailable or silently no-ops.
+- Click-focuses the selector-resolved field before sending keystrokes (same physical click as `click --foreground`). When no `--selector`/`--ref` is given, keys land in the window's currently focused control.
+- **Appends at the caret** — does not replace existing text. `--append false` is accepted but ignored on the Input path (a warning is emitted); use the UIA path for replace semantics.
+- Evidence: `{ injected, expected, chars }`. If `injected == 0`, the target window may be elevated (UIPI); the result is `ok=false` with an elevation hint.
 
 ### `scroll`
 

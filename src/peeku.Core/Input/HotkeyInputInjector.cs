@@ -255,6 +255,46 @@ internal static class HotkeyInputInjector
     return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
   }
 
+  /// <summary>
+  /// Builds a UNICODE key-down + key-up pair for a single UTF-16 code unit.
+  /// Use <c>KEYEVENTF_UNICODE</c> with <c>wVk=0</c> and <c>wScan=codeUnit</c>.
+  /// Surrogate halves are accepted — <c>KEYEVENTF_UNICODE</c> delivers WM_CHAR with the raw code unit.
+  /// </summary>
+  internal static INPUT[] BuildUnicodeChar(ushort codeUnit)
+    =>
+    [
+      new INPUT
+      {
+        type = INPUT_KEYBOARD,
+        U = new InputUnion
+        {
+          ki = new KEYBDINPUT
+          {
+            wVk = 0,
+            wScan = codeUnit,
+            dwFlags = KEYEVENTF_UNICODE,
+            time = 0,
+            dwExtraInfo = 0,
+          },
+        },
+      },
+      new INPUT
+      {
+        type = INPUT_KEYBOARD,
+        U = new InputUnion
+        {
+          ki = new KEYBDINPUT
+          {
+            wVk = 0,
+            wScan = codeUnit,
+            dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
+            time = 0,
+            dwExtraInfo = 0,
+          },
+        },
+      },
+    ];
+
   private static INPUT KeyDown(KeySpec key)
     => new()
     {
@@ -506,6 +546,7 @@ internal static class HotkeyInputInjector
 
   private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
   private const uint KEYEVENTF_KEYUP       = 0x0002;
+  private const uint KEYEVENTF_UNICODE     = 0x0004;
 
   internal const uint MOUSEEVENTF_MOVE       = 0x0001;
   internal const uint MOUSEEVENTF_LEFTDOWN   = 0x0002;

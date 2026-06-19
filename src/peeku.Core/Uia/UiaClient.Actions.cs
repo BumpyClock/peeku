@@ -432,7 +432,7 @@ public sealed partial class UiaClient
           Error: PeekuErrors.Create(PeekuErrorCode.InvalidArgument, "Request is required."));
       }
 
-      methodUsed = ActionMethodRouter.Route(ActionMethod.Auto, uiaSupported: true, inputSupported: false, out var routeError);
+      methodUsed = ActionMethodRouter.Route(req.Method, uiaSupported: true, inputSupported: true, out var routeError);
       if (routeError is not null)
       {
         return new ActionResult(
@@ -468,6 +468,60 @@ public sealed partial class UiaClient
           Meta: scope.Meta(warning: resolved.Warning),
           MethodUsed: methodUsed,
           Error: resolved.Error ?? PeekuErrors.Create(PeekuErrorCode.Internal, "Selection resolution failed."));
+      }
+
+      if (methodUsed == ActionMethod.Input || req.Foreground)
+      {
+        // Resolve the target window hwnd for focus capture.
+        var inputTarget = resolved.Selection.Target;
+        var targetWindow = Win32Windows.ResolveTargetWindow(inputTarget, ct);
+        var targetHwnd = targetWindow?.Hwnd ?? IntPtr.Zero;
+
+        // Get the element rect via a fresh UIA walk (same pattern as click Input branch).
+        using var inputAutomation = new UIA3Automation();
+        var inputRoot = ResolveRoot(resolved.Selection.Target, inputAutomation, ct, out var inputRootWarning);
+        if (inputRoot is null)
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, inputRootWarning)),
+            MethodUsed: methodUsed,
+            Error: PeekuErrors.Create(PeekuErrorCode.WindowNotFound, "Target window not found."));
+        }
+
+        var inputElement = FindByRefId(inputRoot, resolved.Selection.Element.RefId, maxNodes: 20_000, ct);
+        Rect? rect = null;
+        if (inputElement is not null)
+        {
+          var uiaRect = inputElement.BoundingRectangle;
+          rect = new Rect(uiaRect.X, uiaRect.Y, uiaRect.Width, uiaRect.Height);
+        }
+
+        // Warn when Append=false — synthetic keystrokes insert at caret and cannot replace.
+        var typeWarning = !req.Append
+          ? "Input path inserts at the caret and does not honor Append=false (replace). Use the Uia path for replace semantics."
+          : null;
+
+        var (typeOk, typeError, typeEvidence) = await SyntheticText.TypeUnicodeAsync(
+          targetHwnd, rect, req.Text, req.DelayMs.GetValueOrDefault(0), ct).ConfigureAwait(false);
+        if (!typeOk)
+        {
+          return new ActionResult(
+            Ok: false,
+            Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, CombineWarnings(inputRootWarning, typeWarning))),
+            MethodUsed: methodUsed,
+            Error: typeError);
+        }
+
+        var evidenceJson = typeEvidence is not null
+          ? System.Text.Json.JsonSerializer.SerializeToElement(typeEvidence)
+          : (System.Text.Json.JsonElement?)null;
+
+        return new ActionResult(
+          Ok: true,
+          Meta: scope.Meta(warning: CombineWarnings(resolved.Warning, CombineWarnings(inputRootWarning, typeWarning))),
+          MethodUsed: methodUsed,
+          Evidence: evidenceJson);
       }
 
       using var automation = new UIA3Automation();
